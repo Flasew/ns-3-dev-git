@@ -248,6 +248,7 @@ TcpOptionTdTcpDSS::operator== (const TcpOptionTdTcpDSS& other) const
 void 
 TcpOptionTdTcpDSS::SetData (const uint8_t& subflowId, const uint32_t & seq)
 {
+  NS_LOG_FUNCTION (this << subflowId << seq);
   m_dsubflowid = subflowId;
   m_dataseq = seq;
   m_hasdata = true;
@@ -256,6 +257,7 @@ TcpOptionTdTcpDSS::SetData (const uint8_t& subflowId, const uint32_t & seq)
 void 
 TcpOptionTdTcpDSS::SetAck (const uint8_t& subflowId, const uint32_t & ack) 
 {
+  NS_LOG_FUNCTION (this << subflowId << ack);
   m_asubflowid = subflowId;
   m_acknum = ack;
   m_hasack = true;
@@ -264,6 +266,7 @@ TcpOptionTdTcpDSS::SetAck (const uint8_t& subflowId, const uint32_t & ack)
 bool 
 TcpOptionTdTcpDSS::GetData (uint8_t& subflowId, uint32_t & seq)
 {
+  NS_LOG_FUNCTION (this);
   if (!m_hasdata)
     return false;
 
@@ -275,6 +278,8 @@ TcpOptionTdTcpDSS::GetData (uint8_t& subflowId, uint32_t & seq)
 bool 
 TcpOptionTdTcpDSS::GetAck (uint8_t& subflowId, uint32_t & ack)
 {
+  NS_LOG_FUNCTION (this);
+
   if (!m_hasack)
     return false;
 
@@ -414,6 +419,7 @@ TcpOptionTdTcpClose::operator== (const TcpOptionTdTcpClose& other) const
 void 
 TcpOptionTdTcpClose::SetSubflowLastSSeq(const uint8_t & subflowid, const uint32_t & lseq)
 {
+  NS_LOG_FUNCTION (this << subflowid << lseq);
   m_subflowid = subflowid;
   m_lastseq = lseq;
 }
@@ -421,6 +427,7 @@ TcpOptionTdTcpClose::SetSubflowLastSSeq(const uint8_t & subflowid, const uint32_
 void 
 TcpOptionTdTcpClose::GetSubflowLastSSeq(uint8_t & subflowid, uint32_t & lseq)
 {
+  NS_LOG_FUNCTION (this);
   subflowid = m_subflowid;
   lseq = m_lastseq;
 }
