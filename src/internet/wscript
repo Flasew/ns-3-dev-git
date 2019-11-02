@@ -177,6 +177,11 @@ def build(bld):
         'model/mptcp-fullmesh.cc',
         'model/tcp-option-sack-permitted.cc',
         'model/tcp-option-sack.cc',
+        'model/tcp-option-tdtcp.cc',
+        'model/tdtcp-socket-base.cc',
+        'model/tdtcp-mapping.cc',
+        'model/tdtcp-tx-subflow.cc',
+        'model/tdtcp-rx-subflow.cc',
         'model/ipv4-packet-info-tag.cc',
         'model/ipv6-packet-info-tag.cc',
         'model/ipv4-interface-address.cc',
@@ -310,6 +315,11 @@ def build(bld):
     headers = bld(features='ns3header')
     headers.module = 'internet'
     headers.source = [
+        'model/tcp-option-tdtcp.h',
+        'model/tdtcp-socket-base.h',
+        'model/tdtcp-mapping.h',
+        'model/tdtcp-tx-subflow.h',
+        'model/tdtcp-rx-subflow.h',
         'model/udp-header.h',
         'model/tcp-header.h',
         'model/tcp-option.h',
