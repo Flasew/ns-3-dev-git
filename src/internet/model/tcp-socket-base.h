@@ -1220,6 +1220,8 @@ protected:
    */
   void AddSocketTags (const Ptr<Packet> &p) const;
 
+  Ptr<TdTcpSocketBase> ForkTD();
+
 protected:
   //mptcp classes declared as friends
   friend class MpTcpSocketBase;
@@ -1296,10 +1298,14 @@ protected:
   TracedValue<SequenceNumber32> m_highRxAckMark {0}; //!< Highest ack received
 
   // MPTCP variables
-  bool        m_mptcpEnabled   {true};         //!< Window Scale option enabled
+  bool        m_mptcpEnabled   {false};         //!< Window Scale option enabled
   uint64_t    m_mptcpLocalKey  {0};        //!< MPTCP key
   uint32_t    m_mptcpLocalToken{0};      //!< Hash of the key
   uint32_t    m_mptcpPeerToken {0};      //!< Hash of the key
+
+  // TDTCP variables
+  bool m_tdtcpEnabled {true};
+  uint8_t m_tdNSubflows {2};
 
   // Options
   bool    m_sackEnabled       {true}; //!< RFC SACK option enabled

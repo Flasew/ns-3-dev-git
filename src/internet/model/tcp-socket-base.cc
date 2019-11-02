@@ -1538,7 +1538,9 @@ TcpSocketBase::IsTcpOptionEnabled (uint8_t kind) const
     case TcpOption::SACK:
       return m_sackEnabled;
     case TcpOption::MPTCP:
-         return m_mptcpEnabled;
+      return m_mptcpEnabled;
+    case TcpOption::TDTCP:
+      return m_tdtcpEnabled;
     default:
       break;
     }
@@ -2056,14 +2058,24 @@ TcpSocketBase::ProcessListen (Ptr<Packet> packet, const TcpHeader& tcpHeader,
     }
   ///! we first forked here
   //////////////////////////////////////
-  if (ProcessTcpOptions(tcpHeader) == 1)
-    {
-     NS_LOG_LOGIC("Fork & Upgrade to meta " << this);
-     Ptr<MpTcpSubflow> master = this->UpgradeToMeta();
-     Simulator::ScheduleNow (&MpTcpSubflow::CompleteFork, master,
-                         packet, tcpHeader, fromAddress, toAddress);
-       return;
-    }
+  int tcpoptresult = ProcessTcpOptions(tcpHeader);
+  if (tcpoptresult == 1)
+  {
+   NS_LOG_LOGIC("Fork & Upgrade to meta " << this);
+   Ptr<MpTcpSubflow> master = this->UpgradeToMeta();
+   Simulator::ScheduleNow (&MpTcpSubflow::CompleteFork, master,
+                       packet, tcpHeader, fromAddress, toAddress);
+     return;
+  }
+  else if (tcpoptresult == 2) 
+  {
+    NS_LOG_LOGIC("Fork to TDTCP socket" << this);
+    Ptr<TdTcpSocketBase> newSock = ForkTD();
+    Simulator::ScheduleNow (&TdTcpSocketBase::CompleteFork, newSock,
+                          packet, tcpHeader, fromAddress, toAddress);
+    return;
+
+  }
 
   Ptr<TcpSocketBase> newSock = Fork();
   NS_LOG_LOGIC ("Cloned a TcpSocketBase " << newSock);
@@ -2111,6 +2123,37 @@ TcpSocketBase::UpgradeToMeta()
   return master;
 }
 
+Ptr<TdTcpSocketBase>
+TcpSocketBase::ForkTD()
+{
+  NS_LOG_FUNCTION("Forking to TDTCP " << this);
+
+  Callback<void, Ptr<Socket>, uint32_t > cbSend = this->m_sendCb;
+  Callback<void, Ptr<Socket> >  cbRcv = this->m_receivedData;
+  Callback<void, Ptr<Socket>, uint32_t>  cbDataSent = this->m_dataSent;
+  Callback<void, Ptr<Socket> >  cbConnectFail = this->m_connectionFailed;
+  Callback<void, Ptr<Socket> >  cbConnectSuccess = this->m_connectionSucceeded;
+  Callback<bool, Ptr<Socket>, const Address &> connectionRequest = this->m_connectionRequest;
+  Callback<void, Ptr<Socket>, const Address&> newConnectionCreated = this->m_newConnectionCreated;
+
+  Ptr<TdTcpSocketBase> socket = CreateObject<TdTcpSocketBase>(this);
+
+  bool result = m_tcp->AddSocket(socket);
+  NS_ASSERT_MSG(result, "Could not register TD socket");
+
+  socket->SetTcp(this->m_tcp);
+  socket->SetNode(this->GetNode());
+  // we add it to tcp so that it can be freed and used for token lookup
+  socket->SetSendCallback(cbSend);
+  socket->SetConnectCallback (cbConnectSuccess, cbConnectFail);
+  socket->SetDataSentCallback (cbDataSent);
+  socket->SetRecvCallback (cbRcv);
+  socket->SetAcceptCallback(connectionRequest, newConnectionCreated);
+
+  return socket;
+
+}
+
 int
 TcpSocketBase::ProcessTcpOptions(const TcpHeader& header)
 {
@@ -2135,6 +2178,13 @@ TcpSocketBase::ProcessTcpOptions(const TcpHeader& header)
           if (ProcessOptionMpTcp(option) != 0)
             {
               return 1;
+            }
+          break;
+        case TcpOption::TDTCP:
+
+          if (ProcessOptionTdTcp(option) != 0)
+            {
+              return 2;
             }
           break;
         case TcpOption::TS:

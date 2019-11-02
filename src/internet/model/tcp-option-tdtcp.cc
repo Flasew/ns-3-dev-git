@@ -33,7 +33,7 @@ NS_LOG_COMPONENT_DEFINE ("TcpOptionTdTcp");
 
 /////////////////////////////////////////////////////////
 ////////  Base for TDTCP options
-/////////////////////////////////////////////////////////
+//////////////////////////////a///////////////////////////
 TcpOptionTdTcpMain::TcpOptionTdTcpMain ()
   : TcpOption ()
 {
@@ -192,6 +192,8 @@ TcpOptionTdTcpDSS::TcpOptionTdTcpDSS ()
   : TcpOptionTdTcp (),
     m_hasdata (false),
     m_hasack (false),
+    m_dcarrier (0),
+    m_acarrier (0),
     m_dsubflowid (0),
     m_asubflowid (0),
     m_dataseq (0),
@@ -224,25 +226,21 @@ TcpOptionTdTcpDSS::GetInstanceTypeId (void) const
 uint32_t
 TcpOptionTdTcpDSS::GetSerializedSize (void) const
 {
-  uint32_t len = (m_hasdata && m_hasack) ? 16 : 8;
-  return len;
+  return 16;
 }
 
 bool 
 TcpOptionTdTcpDSS::operator== (const TcpOptionTdTcpDSS& other) const 
 {
-  bool result = (m_hasdata == other.m_hasdata) && (m_hasack == other.m_hasack);
-  
-  if (!result)
-    return false;
+  return m_hasdata    == other.m_hasdata    &&
+         m_hasack     == other.m_hasack     &&
+         m_dsubflowid == other.m_dsubflowid &&
+         m_asubflowid == other.m_asubflowid &&
+         m_dcarrier   == other.m_dcarrier   &&
+         m_acarrier   == other.m_acarrier   &&
+         m_dataseq    == other.m_dataseq    &&
+         m_acknum     == other.m_acknum;
 
-  if (m_hasdata)
-    result = result && (m_dataseq == other.m_dataseq);
-
-  if (m_hasack)
-    result = result && (m_acknum == other.m_acknum);
-
-  return result;
 }
 
 void 
@@ -261,6 +259,20 @@ TcpOptionTdTcpDSS::SetAck (const uint8_t& subflowId, const uint32_t & ack)
   m_asubflowid = subflowId;
   m_acknum = ack;
   m_hasack = true;
+}
+
+void 
+TcpOptionTdTcpDSS::SetDataCarrier(const uint8_t &carrier)
+{
+  NS_LOG_FUNCTION (this << carrier);
+  m_dcarrier = carrier;
+}
+
+void 
+TcpOptionTdTcpDSS::SetAckCarrier(const uint8_t &carrier)
+{
+  NS_LOG_FUNCTION (this << carrier);
+  m_acarrier = carrier;
 }
 
 bool 
@@ -285,6 +297,28 @@ TcpOptionTdTcpDSS::GetAck (uint8_t& subflowId, uint32_t & ack)
 
   subflowId = m_asubflowid;
   ack = m_acknum;
+  return true;
+}
+
+bool 
+TcpOptionTdTcpDSS::GetDataCarrier(uint8_t &carrier)
+{
+  NS_LOG_FUNCTION (this);
+  if (!m_hasdata)
+    return false;
+
+  carrier = m_dcarrier;
+  return true;
+}
+
+bool 
+TcpOptionTdTcpDSS::GetAckCarrier(uint8_t &carrier)
+{
+  NS_LOG_FUNCTION (this);
+  if (!m_hasack)
+    return false;
+
+  carrier = m_acarrier;
   return true;
 }
 
@@ -316,25 +350,13 @@ TcpOptionTdTcpDSS::Serialize (Buffer::Iterator i) const
   uint8_t subtypeAndFlag = (GetSubType () << 4) 
     | (m_hasdata ? (TD_DATA) : 0) | (m_hasack ? (TD_ACK) : 0);
 
-  i.WriteU8 ( subtypeAndFlag ); // Kind
-
-  if (m_hasdata != m_hasack) {
-    if (m_hasdata) {
-      i.WriteU8(m_dsubflowid);
-      i.WriteHtonU32(m_dataseq);
-    }
-    else {
-      i.WriteU8(m_asubflowid);
-      i.WriteHtonU32(m_acknum);
-    }
-  }
-
-  else {
-    i.WriteU8(m_dsubflowid);
-    i.WriteHtonU32 ( (uint32_t)m_asubflowid );
-    i.WriteHtonU32 ( m_dataseq );
-    i.WriteHtonU32 ( m_acknum );
-  }
+  i.WriteU8(subtypeAndFlag); // Kind
+  i.WriteU8(m_dsubflowid);
+  i.WriteU8(m_dcarrier);
+  i.WriteU8(m_asubflowid);
+  i.WriteU8(m_acarrier);
+  i.WriteHtonU32 ( m_dataseq );
+  i.WriteHtonU32 ( m_acknum );
 
 }
 
@@ -342,33 +364,23 @@ uint32_t
 TcpOptionTdTcpDSS::Deserialize (Buffer::Iterator i) 
 {
   uint32_t length = TcpOptionTdTcpMain::DeserializeRef (i);
-  NS_ASSERT (length == 8 || length == 16);
+  NS_ASSERT (length == 16);
 
   uint8_t subtypeAndFlag = i.ReadU8();
   NS_ASSERT ( subtype >> 4 == GetSubType () );
 
-  bool hasdata = subtypeAndFlag & TD_DATA;
-  bool hasack = subtypeAndFlag & TD_ACK;
+  m_hasdata = subtypeAndFlag & TD_DATA;
+  m_hasack = subtypeAndFlag & TD_ACK;
 
-  if (hasdata != hasack) {
-    uint8_t subflowid = i.ReadU8();
-    uint32_t seqorack = i.ReadNtohU32();
-    if (hasdata) {
-      SetData(subflowid, seqorack);
-    }
-    else {
-      SetAck(subflowid, seqorack);
-    }
-  }
+  uint8_t unused = i.ReadU8();
 
-  else {
-    uint8_t dsubflowid = i.ReadU8();
-    uint8_t asubflowid = (uint8_t)i.ReadNtohU32();
-    uint32_t sseq = i.ReadNtohU32();
-    uint32_t sack = i.ReadNtohU32();
-    SetData(dsubflowid, sseq);
-    SetData(asubflowid, sack);
-  }
+  m_dsubflowid = i.ReadU8();
+  m_dcarrier   = i.ReadU8();
+  m_asubflowid = i.ReadU8();
+  m_acarrier   = i.ReadU8();
+
+  m_dataseq = i.ReadNtohU32();
+  m_acknum = i.ReadNtohU32();
 
   return length;
 }

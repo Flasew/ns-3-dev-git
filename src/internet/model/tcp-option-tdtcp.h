@@ -172,31 +172,24 @@ private:
  * Header is variable length
  *   0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
  *  +---------------+---------------+-------+-------+---------------+
- *  |     Kind      |    Length=16  |SubType|   |D|A|   D subf ID   |
+ *  |     Kind      |   Length=16   |SubType| |F|D|A|               |
  *  +---------------+---------------+-------+-------+---------------+
- *  |                 paddings with 0               |   A Subf ID   |
+ *  | D seq subf ID | D car subf id | A seq subf ID | A car subf id |
  *  +---------------+---------------+-------+-------+---------------+
  *  |                          SSEQ (32 bits)                       |
  *  +---------------+---------------+-------+-------+---------------+
  *  |                          SACK (32 bits)                       |
  *  +---------------+---------------+-------+-------+---------------+
  *
- * OR
- *
- *  *   0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
- *  +---------------+---------------+-------+-------+---------------+
- *  |     Kind      |    Length=8   |SubType|   |D|A|  D/A subf ID  |
- *  +---------------+---------------+-------+-------+---------------+
- *  |                    SSEQ or SACK  (32 bits)                    |
- *  +---------------+---------------+-------+-------+---------------+
  */ 
 
 class TcpOptionTdTcpDSS : public TcpOptionTdTcp<TcpOptionTdTcpMain::TD_DSS>
 {
 public:
   
+  static const uint8_t TD_FIN = 0x4;
   static const uint8_t TD_DATA = 0x2;
-  static const uint8_t TD_ACK = 0x1;
+  // static const uint8_t TD_ACK = 0x1;
 
   TcpOptionTdTcpDSS (void);
   virtual ~TcpOptionTdTcpDSS (void);
@@ -206,10 +199,15 @@ public:
 
   bool operator== (const TcpOptionTdTcpDSS&) const;
 
+  // virtual void SetFin ();
   virtual void SetData (const uint8_t& subflowId, const uint32_t & seq);
   virtual void SetAck (const uint8_t& subflowId, const uint32_t & ack);
+  virtual void SetDataCarrier (const uint8_t& carrier);
+  virtual void SetAckCarrier (const uint8_t& carrier);
   virtual bool GetData (uint8_t& subflowId, uint32_t & seq);
   virtual bool GetAck (uint8_t& subflowId, uint32_t & ack);
+  virtual bool GetDataCarrier (uint8_t& carrier);
+  virtual bool GetAckCarrier (uint8_t& carrier);
 
   //! Inherited
   virtual void Print (std::ostream &os) const;
@@ -222,6 +220,8 @@ protected:
   bool m_hasack;
   uint8_t m_dsubflowid;
   uint8_t m_asubflowid;
+  uint8_t m_dcarrier;
+  uint8_t m_acarrier;
   uint32_t m_dataseq;
   uint32_t m_acknum;
 
