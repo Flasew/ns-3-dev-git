@@ -1006,6 +1006,12 @@ int
 TcpSocketBase::DoConnect (void)
 {
   NS_LOG_FUNCTION (this);
+  if (m_tdtcpEnabled) 
+  {
+    this->UpgradeToTd();
+    Simulator::ScheduleNow(&TdTcpSocketBase::DoConnect, this);
+    return 0;
+  }
 
   // A new connection is allowed only if this socket does not have a connection
   if (m_state == CLOSED || m_state == LISTEN || m_state == SYN_SENT || m_state == LAST_ACK || m_state == CLOSE_WAIT)
@@ -2206,6 +2212,40 @@ TcpSocketBase::ProcessTcpOptions(const TcpHeader& header)
   return 0;
 }
 
+void
+TcpSocketBase::UpgradeToTd()
+{
+  NS_LOG_FUNCTION("Upgrading to td " << this);
+
+  // set callbacks
+  Callback<void, Ptr<Socket>, uint32_t > cbSend = this->m_sendCb;
+  Callback<void, Ptr<Socket> >  cbRcv = this->m_receivedData;
+  Callback<void, Ptr<Socket>, uint32_t>  cbDataSent = this->m_dataSent;
+  Callback<void, Ptr<Socket> >  cbConnectFail = this->m_connectionFailed;
+  Callback<void, Ptr<Socket> >  cbConnectSuccess = this->m_connectionSucceeded;
+  Callback<bool, Ptr<Socket>, const Address &> connectionRequest = this->m_connectionRequest;
+  Callback<void, Ptr<Socket>, const Address&> newConnectionCreated = this->m_newConnectionCreated;
+  ////////////////////////
+  //// !! CAREFUL !!
+  //// all callbacks are disabled
+  // Otherwise timers
+  this->CancelAllTimers();
+  Ptr<TcpL4Protocol> tcp = this->m_tcp;
+  auto node = GetNode();
+
+  // I don't want the destructor to be called in that moment
+  TdTcpSocketBase* meta = new (this) TdTcpSocketBase(this);
+  meta->SetTcp(tcp);
+  meta->SetNode(node);
+  // we add it to tcp so that it can be freed and used for token lookup
+  meta->SetSendCallback(cbSend);
+  meta->SetConnectCallback (cbConnectSuccess, cbConnectFail);
+  meta->SetDataSentCallback (cbDataSent);
+  meta->SetRecvCallback (cbRcv);
+  meta->SetAcceptCallback(connectionRequest, newConnectionCreated);
+  return ;
+}
+
 /* Received a packet upon SYN_SENT */
 void
 TcpSocketBase::ProcessSynSent (Ptr<Packet> packet, const TcpHeader& tcpHeader)
@@ -2218,14 +2258,14 @@ TcpSocketBase::ProcessSynSent (Ptr<Packet> packet, const TcpHeader& tcpHeader)
 
   if (tcpflags == 0)
     { // Bare data, accept it and move to ESTABLISHED state. This is not a normal behaviour. Remove this?
-      NS_LOG_DEBUG ("SYN_SENT -> ESTABLISHED");
-      m_congestionControl->CongestionStateSet (m_tcb, TcpSocketState::CA_OPEN);
-      m_state = ESTABLISHED;
-      m_connected = true;
-      m_retxEvent.Cancel ();
-      m_delAckCount = m_delAckMaxCount;
-      ReceivedData (packet, tcpHeader);
-      Simulator::ScheduleNow (&TcpSocketBase::ConnectionSucceeded, this);
+      // NS_LOG_DEBUG ("SYN_SENT -> ESTABLISHED");
+      // m_congestionControl->CongestionStateSet (m_tcb, TcpSocketState::CA_OPEN);
+      // m_state = ESTABLISHED;
+      // m_connected = true;
+      // m_retxEvent.Cancel ();
+      // m_delAckCount = m_delAckMaxCount;
+      // ReceivedData (packet, tcpHeader);
+      // Simulator::ScheduleNow (&TcpSocketBase::ConnectionSucceeded, this);
     }
   else if (tcpflags & TcpHeader::ACK && !(tcpflags & TcpHeader::SYN))
     { // Ignore ACK in SYN_SENT
@@ -2255,11 +2295,18 @@ TcpSocketBase::ProcessSynSent (Ptr<Packet> packet, const TcpHeader& tcpHeader)
   else if (tcpflags & (TcpHeader::SYN | TcpHeader::ACK)
            && m_tcb->m_nextTxSequence + SequenceNumber32 (1) == tcpHeader.GetAckNumber ())
     { // Handshake completed
-      if(ProcessTcpOptions(tcpHeader) == 1)
+      int processResult = ProcessTcpOptions(tcpHeader);
+      if(processResult == 1)
       {
         // upgrade to mptcp socket
         Ptr<MpTcpSubflow> master = UpgradeToMeta();
         Simulator::ScheduleNow( &MpTcpSubflow::ProcessSynSent, master, packet, tcpHeader);
+        return;
+      }
+      if(processResult == 2)
+      {
+        UpgradeToTd();
+        Simulator::ScheduleNow( &TdTcpSocketBase::ProcessSynSent, this, packet, tcpHeader);
         return;
       }
       NS_LOG_DEBUG ("SYN_SENT -> ESTABLISHED");
@@ -2753,6 +2800,11 @@ TcpSocketBase::SendEmptyPacket (uint8_t flags)
         { // The window scaling option is set only on SYN packets
           AddOptionWScale (header);
         }
+
+      // if (m_tdtcpEnabled)
+      // {
+      //   AddOptionTdTcp ()
+      // }
 
       if (m_sackEnabled)
         {
@@ -4208,6 +4260,20 @@ TcpSocketBase::ProcessOptionMpTcp ( const Ptr<const TcpOption> option)
   Ptr<const TcpOptionMpTcpCapable> mpc = DynamicCast<const TcpOptionMpTcpCapable>(option);
 
   if (!mpc)
+   {
+     NS_LOG_WARN("Invalid option " << option);
+     return 0;
+   }
+  return 1;
+}
+
+
+int
+TcpSocketBase::ProcessOptionTdTcp ( const Ptr<const TcpOption> option)
+{
+  Ptr<const TcpOptionTdTcpCapable> tdc = DynamicCast<const TcpOptionTdTcpCapable>(option);
+
+  if (!tdc)
    {
      NS_LOG_WARN("Invalid option " << option);
      return 0;

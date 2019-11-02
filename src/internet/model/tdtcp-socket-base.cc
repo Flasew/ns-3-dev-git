@@ -189,7 +189,7 @@ TdTcpSubflow::ProcessOptionTdTcp (const Ptr<const TcpOption> option)
             NS_FATAL_ERROR("Unsupported yet");
             break;
       };
-  return 0;
+  return 2;
 }
 
 void 

@@ -1221,6 +1221,8 @@ protected:
   void AddSocketTags (const Ptr<Packet> &p) const;
 
   Ptr<TdTcpSocketBase> ForkTD();
+  bool ProcessOptionTdTcp(const TcpHeader& header);
+  void UpgradeToTd();
 
 protected:
   //mptcp classes declared as friends
