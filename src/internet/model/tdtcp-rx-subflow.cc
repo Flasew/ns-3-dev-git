@@ -18,8 +18,9 @@
  * Author:  Weiyang Wang <wew168@ucsd.edu>
  */
 
-#include "tdtcp-rx-subflow.h"
-#include "tdtcp-tx-subflow.h"
+#include <algorithm>
+#include <iostream>
+#include "ns3/tdtcp-rx-subflow.h"
 #include "ns3/simulator.h"
 #include "ns3/log.h"
 #include "ns3/abort.h"
@@ -29,13 +30,12 @@
 #include "ns3/ipv4-end-point.h"
 #include "ns3/node.h"
 #include "ns3/ptr.h"
-#include "ns3/tcp-option-mptcp.h"
 #include "ns3/ipv4-address.h"
 #include "ns3/trace-helper.h"
-#include <algorithm>
-#include <iostream>
 
 namespace ns3 {
+
+NS_LOG_COMPONENT_DEFINE ("TdTcpRxSubflow");
 
 static inline TdTcpMapping
 GetMapping(uint32_t dseq, uint32_t sseq, uint16_t length)
@@ -60,7 +60,7 @@ TdTcpRxSubflow::~TdTcpRxSubflow()
 }
 
 void 
-TdTcpRxSubflow::ReceivedData (Ptr<Packet> packet, const TcpHeader& tcpHeader, SequenceNumber32 sseq, uint8_t scid)
+TdTcpRxSubflow::ReceivedData (Ptr<Packet> p, const TcpHeader& tcpHeader, SequenceNumber32 sseq, uint8_t scid)
 {
 
   TdTcpMapping mapping;
@@ -88,7 +88,7 @@ TdTcpRxSubflow::ReceivedData (Ptr<Packet> packet, const TcpHeader& tcpHeader, Se
   // Notify app to receive if necessary
   if (expectedSSN < m_rxBuffer->NextRxSequence())
   { // NextRxSeq advanced, we have something to send to the app
-    m_meta->OnSubflowReceive(packet, tcpheader, this, m_rxBuffer->NextRxSequence().GetValue());
+    m_meta->OnSubflowReceive(packet, tcpHeader, this, m_rxBuffer->NextRxSequence().GetValue());
   }
   m_meta->SendAckPacket(m_subflowid, scid,
                         m_rxBuffer->NextRxSequence().GetValue());
@@ -100,14 +100,14 @@ TdTcpRxSubflow::ExtractAtMostOneMapping(uint32_t maxSize, bool only_full_mapping
 {
   TdTcpMapping mapping;
   Ptr<Packet> p = Create<Packet>();
-  uint32_t rxAvailable = GetRxAvailable();
+  uint32_t rxAvailable = m_rxBuffer->Available (); 
   if(rxAvailable == 0)
   {
     NS_LOG_LOGIC("Nothing to extract");
     return p;
   }
   else
-  {
+m_rxBuffer->Available ()  {
     NS_LOG_LOGIC(rxAvailable  << " Rx available");
   }
 

@@ -38,6 +38,7 @@
 
 namespace ns3 {
 
+NS_LOG_COMPONENT_DEFINE ("TdTcpTxSubflow");
 
 TdTcpTxSubflow::TdTcpTxSubflow (uint8_t id, Ptr<TdTcpSocketBase> tdtcp) 
 {

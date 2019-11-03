@@ -72,9 +72,9 @@ static inline TdTcpMapping
 GetMapping(uint32_t dseq, uint32_t sseq, uint16_t length)
 {
   TdTcpMapping mapping;
-  mapping.SetHeadDSN(dseq);
+  mapping.SetHeadDSN(SequenceNumber32(dseq));
   mapping.SetMappingSize(length);
-  mapping.MapToSSN(sseq);
+  mapping.MapToSSN(SequenceNumber32(sseq));
   return mapping;
 }
 

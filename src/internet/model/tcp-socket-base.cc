@@ -22,6 +22,9 @@
 #define NS_LOG_APPEND_CONTEXT \
   if (m_node) { std::clog << " [node " << m_node->GetId () << "] "; }
 
+#include <math.h>
+#include <algorithm>
+
 #include "ns3/abort.h"
 #include "ns3/node.h"
 #include "ns3/inet-socket-address.h"
@@ -65,8 +68,6 @@
 #include "tcp-option-mptcp.h"
 #include "tcp-option-tdtcp.h"
 
-#include <math.h>
-#include <algorithm>
 
 namespace ns3 {
 

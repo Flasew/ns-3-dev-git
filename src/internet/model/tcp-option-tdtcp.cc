@@ -18,18 +18,16 @@
  * Author:  Weiyang Wang <wew168@ucsd.edu>
  */
 
-#include "tcp-option-tdtcp.h"
+#include "ns3/tcp-option-tdtcp.h"
 #include "ns3/log.h"
 
-
 namespace ns3 {
+
+NS_LOG_COMPONENT_DEFINE ("TcpOptionTdTcp");
 
 NS_OBJECT_ENSURE_REGISTERED (TcpOptionTdTcpCapable);
 NS_OBJECT_ENSURE_REGISTERED (TcpOptionTdTcpDSS);
 NS_OBJECT_ENSURE_REGISTERED (TcpOptionTdTcpClose);
-
-NS_LOG_COMPONENT_DEFINE ("TcpOptionTdTcp");
-
 
 /////////////////////////////////////////////////////////
 ////////  Base for TDTCP options

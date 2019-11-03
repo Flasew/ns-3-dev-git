@@ -21,7 +21,6 @@
 #define TCP_OPTION_TDTCP_H
 
 #include "ns3/tcp-option.h"
-#include <vector>
 
 namespace ns3 {
 
