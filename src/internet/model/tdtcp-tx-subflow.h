@@ -87,7 +87,6 @@ private:
   // Pacing related variable
   Timer m_pacingTimer {Timer::REMOVE_ON_DESTROY}; //!< Pacing Event
 
-  Ptr<TcpTxBuffer> m_txBuffer;
   TdTcpMappingContainer m_TxMappings;  //!< List of mappings to send
 };
 

@@ -20,13 +20,7 @@
 #ifndef TCP_OPTION_TDTCP_H
 #define TCP_OPTION_TDTCP_H
 
-#include "tcp-option.h"
-#include "tcp-header.h"
-#include "ns3/log.h"
-#include "ns3/address.h"
-#include "ns3/inet-socket-address.h"
-#include "ns3/inet6-socket-address.h"
-#include "ns3/sequence-number.h"
+#include "ns3/tcp-option.h"
 #include <vector>
 
 namespace ns3 {
@@ -42,10 +36,10 @@ public:
     TD_CAPABLE,
     TD_DSS,
     TD_CLOSE
-  }
+  };
 
-  TcpOptionTdTcp (void);
-  virtual ~TcpOptionTdTcp (void);
+  TcpOptionTdTcpMain (void);
+  virtual ~TcpOptionTdTcpMain (void);
 
   static TypeId GetTypeId (void);
   virtual TypeId GetInstanceTypeId (void) const;
@@ -97,7 +91,7 @@ template<TcpOptionTdTcpMain::SubType SUBTYPE>
 class TcpOptionTdTcp : public TcpOptionTdTcpMain
 {
 public:
-  TcpOptionTdTcp () : TcpOptionMpTcpMain ()
+  TcpOptionTdTcp () : TcpOptionTdTcpMain ()
   {
   }
 
@@ -108,7 +102,7 @@ public:
   /**
    * \return TDTCP option type
    */
-  virtual TcpOptionTcpMain::SubType
+  virtual TcpOptionTdTcpMain::SubType
   GetSubType (void) const
   {
     return SUBTYPE;

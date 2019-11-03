@@ -61,7 +61,9 @@
 #include "mptcp-crypto.h"
 #include "mptcp-subflow.h"
 #include "mptcp-socket-base.h"
+#include "tdtcp-socket-base.h"
 #include "tcp-option-mptcp.h"
+#include "tcp-option-tdtcp.h"
 
 #include <math.h>
 #include <algorithm>

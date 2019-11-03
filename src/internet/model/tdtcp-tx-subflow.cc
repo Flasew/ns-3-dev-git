@@ -20,6 +20,7 @@
 
 #include "tdtcp-rx-subflow.h"
 #include "tdtcp-tx-subflow.h"
+#include "tdtcp-socket-base.h"
 #include "ns3/simulator.h"
 #include "ns3/log.h"
 #include "ns3/abort.h"

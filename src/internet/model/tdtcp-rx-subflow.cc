@@ -41,9 +41,9 @@ static inline TdTcpMapping
 GetMapping(uint32_t dseq, uint32_t sseq, uint16_t length)
 {
   TdTcpMapping mapping;
-  mapping.SetHeadDSN(dseq);
+  mapping.SetHeadDSN(SequenceNumber32(dseq));
   mapping.SetMappingSize(length);
-  mapping.MapToSSN(sseq);
+  mapping.MapToSSN(SequenceNumber32(sseq));
   return mapping;
 }
 
@@ -63,7 +63,7 @@ void
 TdTcpRxSubflow::ReceivedData (Ptr<Packet> packet, const TcpHeader& tcpHeader, SequenceNumber32 sseq, uint8_t scid)
 {
 
-  // TdTcpMapping mapping;
+  TdTcpMapping mapping;
 
   // OutOfRange
   // If cannot find an adequate mapping, then it should [check RFC]

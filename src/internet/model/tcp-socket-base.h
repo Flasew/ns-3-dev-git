@@ -45,6 +45,7 @@ class TcpL4Protocol;
 class TcpHeader;
 class MpTcpSubflow;
 class MpTcpSocketBase;
+class TdTcpSocketBase;
 class TcpOptionMpTcpMain;
 class TcpCongestionOps;
 class TcpRecoveryOps;
