@@ -18,7 +18,22 @@
  * Author:  Weiyang Wang <wew168@ucsd.edu>
  */
 
-#include "ns3/tdtcp-tx-subflow.h"
+#include "tdtcp-rx-subflow.h"
+#include "tdtcp-tx-subflow.h"
+#include "ns3/simulator.h"
+#include "ns3/log.h"
+#include "ns3/abort.h"
+#include "ns3/tdtcp-socket-base.h"
+#include "ns3/tcp-l4-protocol.h"
+#include "ns3/ipv4-address.h"
+#include "ns3/ipv4-end-point.h"
+#include "ns3/node.h"
+#include "ns3/ptr.h"
+#include "ns3/tcp-option-mptcp.h"
+#include "ns3/ipv4-address.h"
+#include "ns3/trace-helper.h"
+#include <algorithm>
+#include <iostream>
 
 namespace ns3 {
 

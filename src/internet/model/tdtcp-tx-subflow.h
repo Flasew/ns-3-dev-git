@@ -33,7 +33,8 @@
 #include "ns3/tcp-socket-state.h"
 #include "ns3/ipv4-end-point.h"
 #include "tcp-tx-buffer.h"
-#include "ns3/tdtcp-mapping.h"
+#include "tdtcp-mapping.h"
+#include "tdtcp-socket-base.h"
 
 namespace ns3 {
 
