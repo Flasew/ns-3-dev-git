@@ -50,6 +50,7 @@ class TdTcpSocketBase : public TcpSocketBase {
 
   friend class TdTcpTxSubflow;
   friend class TdTcpRxSubflow;
+  friend class TcpSocketBase;
 
 public:
 
@@ -81,11 +82,6 @@ protected:
    * \returns 0 on success
    */
   virtual int DoConnect (void);
-
-  /**
-   * \brief Schedule-friendly wrapper for Socket::NotifyConnectionSucceeded()
-   */
-  virtual void ConnectionSucceeded (void);
 
   /**
    * \brief Configure the endpoint to a local address. Called by Connect() if Bind() didn't specify one.
@@ -212,19 +208,19 @@ protected:
    *
    * \returns count of number of unacked bytes
    */
-  virtual uint32_t UnAckDataCount (void) const;
+  //virtual uint32_t UnAckDataCount (void) const;
 
   /**
    * \brief Return the max possible number of unacked bytes
    * \returns the max possible number of unacked bytes
    */
-  virtual uint32_t Window (void) const;
+  // virtual uint32_t Window (void) const;
 
   /**
    * \brief Return unfilled portion of window
    * \return unfilled portion of window
    */
-  virtual uint32_t AvailableWindow (void) const;
+  // virtual uint32_t AvailableWindow (void) const;
 
   /**
    * \brief The amount of Rx window announced to the peer
@@ -232,7 +228,7 @@ protected:
    * almost all cases, except when we are sending a SYN
    * \returns size of Rx window announced to the peer
    */
-  virtual uint16_t AdvertisedWindowSize (bool scale = true) const;
+  // virtual uint16_t AdvertisedWindowSize (bool scale = true) const;
 
   /**
    * \brief Update the receiver window (RWND) based on the value of the
@@ -246,7 +242,7 @@ protected:
    *
    * \param header TcpHeader from which to extract the new window value
    */
-  virtual bool UpdateWindowSize (const TcpHeader& header);
+  // virtual bool UpdateWindowSize (const TcpHeader& header);
 
   // Manage data tx/rx
 
@@ -265,26 +261,26 @@ protected:
 
 
   /** \brief Add options to TcpHeader
-   *
+   *f
    * Test each option, and if it is enabled on our side, add it
    * to the header
    *
    * \param tcpHeader TcpHeader to add options to
    */
-  virtual void AddOptions (TcpHeader& tcpHeader);
+  // virtual void AddOptions (TcpHeader& tcpHeader);
 
 
   /**
    * \return if it returns 1, we need to upgrade the meta socket
    * if negative then it should discard the packet ?
    */
-  virtual int ProcessTcpOptions(const TcpHeader& header);
+  //virtual int ProcessTcpOptions(const TcpHeader& header);
 
   /**
    * \brief In this baseclass, this only deals with MpTcpCapable options in order to know if the socket
    * should be converted to an MPTCP meta socket.
    */
-  virtual int ProcessOptionTdTcp(const Ptr<const TcpOption> option);
+  //virtual int ProcessOptionTdTcp(const Ptr<const TcpOption> option);
 
   /**
    * \brief Read TCP options before Ack processing
@@ -295,40 +291,39 @@ protected:
    * \param scoreboardUpdated indicates if the scoreboard was updated due to a
    * SACK option
    */
-  virtual void ReadOptions (const TcpHeader &tcpHeader, bool &scoreboardUpdated);
+  // virtual void ReadOptions (const TcpHeader &tcpHeader, bool &scoreboardUpdated);
 
-  /**
-   * \brief Notify Pacing
-   */
-  void NotifyPacingPerformed (void);
+  // /**
+  //  * \brief Notify Pacing
+  //  */
+  // virtual void NotifyPacingPerformed (void);
 
-  /**
-   * \brief Add Tags for the Socket
-   * \param p Packet
-   */
-  void AddSocketTags (const Ptr<Packet> &p) const;
+  // /**
+  //  * \brief Add Tags for the Socket
+  //  * \param p Packet
+  //  */
+  // virtual void AddSocketTags (const Ptr<Packet> &p) const;
 
   // Added functions. Not categorized for now...
 
   // Process Option
-  void ProcessOptionTdTcp (const Ptr<const TcpOption> & option);
+  // void ProcessOptionTdTcp (const Ptr<const TcpOption> & option);
+  virtual void ReTxTimeout ();
 
-  uint8_t ProcessOptionTdSYN (const Ptr<const TcpOption> & option);
+  uint8_t ProcessOptionTdTcpCapable (const Ptr<const TcpOption> & option);
 
-  bool ProcessOptionTdDSS (const Ptr<const TcpOption> & option, 
-                           int16_t & ssubflow,
-                           int16_t & rsubflow);
-
-  bool ProcessOptionTdDSS (const Ptr<const TcpOption> & option,
-                           int16_t & ssubflow,
-                           uint32_t & sseq,
-                           int16_t & rsubflow,
+  bool ProcessOptionTdTcpDSS(const Ptr<const TcpOption> & option,
+                           int16_t & ssid, 
+                           int16_t & scid, 
+                           uint32_t & sseq, 
+                           int16_t & asid, 
+                           int16_t & acid, 
                            uint32_t & sack);
 
   // Add option
-  void AddOptionTDSYN(TcpHeader &header, uint8_t n);
+  void AddOptionTdTcpCapable(TcpHeader &header, uint8_t n);
 
-  void AddOptionTDDSS(TcpHeader &header,
+  void AddOptionTdTcpDSS(TcpHeader &header,
                                 bool data,
                                 uint8_t ssid,
                                 uint8_t csid, 
@@ -348,6 +343,7 @@ protected:
   // Deliver ACK
   void DeliverAckToSubflow(uint8_t asid,
                            uint8_t acid,
+                           uint32_t sack,
                            Ptr<Packet> packet, 
                            const TcpHeader& tcpHeader);
 

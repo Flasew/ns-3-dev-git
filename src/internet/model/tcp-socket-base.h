@@ -1213,7 +1213,7 @@ protected:
   /**
    * \brief Notify Pacing
    */
-  void NotifyPacingPerformed (void);
+  virtual void NotifyPacingPerformed (void);
 
   /**
    * \brief Add Tags for the Socket
@@ -1222,8 +1222,8 @@ protected:
   void AddSocketTags (const Ptr<Packet> &p) const;
 
   Ptr<TdTcpSocketBase> ForkTD();
-  bool ProcessOptionTdTcp(const TcpHeader& header);
-  void UpgradeToTd();
+  bool ProcessOptionTdTcp( const Ptr<const TcpOption> option);
+  Ptr<TdTcpSocketBase> UpgradeToTd();
 
 protected:
   //mptcp classes declared as friends

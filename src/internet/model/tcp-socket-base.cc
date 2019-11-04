@@ -1011,8 +1011,8 @@ TcpSocketBase::DoConnect (void)
   NS_LOG_FUNCTION (this);
   if (m_tdtcpEnabled) 
   {
-    this->UpgradeToTd();
-    Simulator::ScheduleNow(&TdTcpSocketBase::DoConnect, this);
+    auto td = this->UpgradeToTd();
+    Simulator::ScheduleNow(&TdTcpSocketBase::DoConnect, td);
     return 0;
   }
 
@@ -2145,7 +2145,7 @@ TcpSocketBase::ForkTD()
   Callback<bool, Ptr<Socket>, const Address &> connectionRequest = this->m_connectionRequest;
   Callback<void, Ptr<Socket>, const Address&> newConnectionCreated = this->m_newConnectionCreated;
 
-  Ptr<TdTcpSocketBase> socket = CreateObject<TdTcpSocketBase>(this);
+  Ptr<TdTcpSocketBase> socket = CreateObject<TdTcpSocketBase>(*this);
 
   bool result = m_tcp->AddSocket(socket);
   NS_ASSERT_MSG(result, "Could not register TD socket");
@@ -2215,7 +2215,7 @@ TcpSocketBase::ProcessTcpOptions(const TcpHeader& header)
   return 0;
 }
 
-void
+Ptr<TdTcpSocketBase>
 TcpSocketBase::UpgradeToTd()
 {
   NS_LOG_FUNCTION("Upgrading to td " << this);
@@ -2236,8 +2236,10 @@ TcpSocketBase::UpgradeToTd()
   Ptr<TcpL4Protocol> tcp = this->m_tcp;
   auto node = GetNode();
 
+  auto temp = this->fork();
+
   // I don't want the destructor to be called in that moment
-  TdTcpSocketBase* meta = new (this) TdTcpSocketBase(this);
+  TdTcpSocketBase* meta = new (this) TdTcpSocketBase(*temp);
   meta->SetTcp(tcp);
   meta->SetNode(node);
   // we add it to tcp so that it can be freed and used for token lookup
@@ -2246,7 +2248,7 @@ TcpSocketBase::UpgradeToTd()
   meta->SetDataSentCallback (cbDataSent);
   meta->SetRecvCallback (cbRcv);
   meta->SetAcceptCallback(connectionRequest, newConnectionCreated);
-  return ;
+  return Ptr<TdTcpSocketBase>(meta);
 }
 
 /* Received a packet upon SYN_SENT */
@@ -2308,8 +2310,8 @@ TcpSocketBase::ProcessSynSent (Ptr<Packet> packet, const TcpHeader& tcpHeader)
       }
       if(processResult == 2)
       {
-        UpgradeToTd();
-        Simulator::ScheduleNow( &TdTcpSocketBase::ProcessSynSent, this, packet, tcpHeader);
+        Ptr<TdTcpSocketBase> tdsocket = UpgradeToTd();
+        Simulator::ScheduleNow( &TdTcpSocketBase::ProcessSynSent, tdsocket, packet, tcpHeader);
         return;
       }
       NS_LOG_DEBUG ("SYN_SENT -> ESTABLISHED");
@@ -4271,7 +4273,7 @@ TcpSocketBase::ProcessOptionMpTcp ( const Ptr<const TcpOption> option)
 }
 
 
-int
+bool
 TcpSocketBase::ProcessOptionTdTcp ( const Ptr<const TcpOption> option)
 {
   Ptr<const TcpOptionTdTcpCapable> tdc = DynamicCast<const TcpOptionTdTcpCapable>(option);
@@ -4279,9 +4281,9 @@ TcpSocketBase::ProcessOptionTdTcp ( const Ptr<const TcpOption> option)
   if (!tdc)
    {
      NS_LOG_WARN("Invalid option " << option);
-     return 0;
+     return false;
    }
-  return 1;
+  return true;
 }
 
 void

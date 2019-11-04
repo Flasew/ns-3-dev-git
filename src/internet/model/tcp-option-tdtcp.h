@@ -140,7 +140,7 @@ public:
   bool operator== (const TcpOptionTdTcpCapable&) const;
 
   virtual void SetNSubflows (const uint8_t& nSubflows);
-  virtual uint64_t GetNSubflows (void) const;
+  virtual uint8_t GetNSubflows (void) const;
 
   //! Inherited
   virtual void Print (std::ostream &os) const;
@@ -182,7 +182,7 @@ public:
   
   static const uint8_t TD_FIN = 0x4;
   static const uint8_t TD_DATA = 0x2;
-  // static const uint8_t TD_ACK = 0x1;
+  static const uint8_t TD_ACK = 0x1;
 
   TcpOptionTdTcpDSS (void);
   virtual ~TcpOptionTdTcpDSS (void);
@@ -197,10 +197,10 @@ public:
   virtual void SetAck (const uint8_t& subflowId, const uint32_t & ack);
   virtual void SetDataCarrier (const uint8_t& carrier);
   virtual void SetAckCarrier (const uint8_t& carrier);
-  virtual bool GetData (uint8_t& subflowId, uint32_t & seq);
-  virtual bool GetAck (uint8_t& subflowId, uint32_t & ack);
-  virtual bool GetDataCarrier (uint8_t& carrier);
-  virtual bool GetAckCarrier (uint8_t& carrier);
+  virtual bool GetData (uint8_t&& subflowId, uint8_t && carrierId, uint32_t & seq) const;
+  virtual bool GetAck (uint8_t&& subflowId, uint8_t && carrierId, uint32_t & ack) const;
+  virtual bool GetDataCarrier (uint8_t& carrier) const;
+  virtual bool GetAckCarrier (uint8_t& carrier) const;
 
   //! Inherited
   virtual void Print (std::ostream &os) const;
@@ -268,5 +268,6 @@ private:
   TcpOptionTdTcpClose& operator= (const TcpOptionTdTcpClose&);
 };
 
+}
 
 #endif // TCP_OPTION_TDTCP_H

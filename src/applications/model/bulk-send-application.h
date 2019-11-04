@@ -98,6 +98,7 @@ public:
    * \return pointer to associated socket
    */
   Ptr<Socket> GetSocket (void) const;
+  void SetUp (Ptr<Socket>, Address, uint64_t, bool bound=true); 
 
 protected:
   virtual void DoDispose (void);
@@ -114,6 +115,8 @@ private:
   Ptr<Socket>     m_socket;       //!< Associated socket
   Address         m_peer;         //!< Peer address
   bool            m_connected;    //!< True if connected
+  bool            m_setted;       //!< If the socket has been setup
+  bool            m_bound;        //!< If the socket is bound
   uint32_t        m_sendSize;     //!< Size of data to send each time
   uint64_t        m_maxBytes;     //!< Limit total number of bytes sent
   uint64_t        m_totBytes;     //!< Total bytes sent so far

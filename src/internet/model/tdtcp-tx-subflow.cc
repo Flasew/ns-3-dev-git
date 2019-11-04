@@ -18,7 +18,6 @@
  * Author:  Weiyang Wang <wew168@ucsd.edu>
  */
 
-#include "tdtcp-rx-subflow.h"
 #include "tdtcp-tx-subflow.h"
 #include "tdtcp-socket-base.h"
 #include "ns3/simulator.h"
@@ -28,23 +27,57 @@
 #include "ns3/tcp-l4-protocol.h"
 #include "ns3/ipv4-address.h"
 #include "ns3/ipv4-end-point.h"
+#include "ipv6-end-point.h"
 #include "ns3/node.h"
 #include "ns3/ptr.h"
 #include "ns3/tcp-option-mptcp.h"
 #include "ns3/ipv4-address.h"
 #include "ns3/trace-helper.h"
+#include "ns3/tcp-congestion-ops.h"
+#include "ns3/tcp-recovery-ops.h"
+#include "ns3/tcp-socket.h"
 #include <algorithm>
+#include <cmath>
 #include <iostream>
 
 namespace ns3 {
 
 NS_LOG_COMPONENT_DEFINE ("TdTcpTxSubflow");
 
+TypeId 
+TdTcpTxSubflow::GetdTypeId (void) 
+{
+  static TypeId tid = TypeId ("ns3::TdTcpTxSubflow")
+    .SetParent<Object> ()
+    .SetGroupName ("Internet")
+    .AddConstructor<TdTcpTxSubflow> ()
+  ;
+  return tid;
+}
+
+TypeId 
+TdTcpTxSubflow::GetInstanceTypeId ()
+{
+  return TdTcpTxSubflow::GetTypeId();
+}
+
 TdTcpTxSubflow::TdTcpTxSubflow (uint8_t id, Ptr<TdTcpSocketBase> tdtcp) 
 {
   m_meta = tdtcp;
   m_subflowid = id;
   m_txBuffer = CreateObject<TcpTxBuffer> ();
+  m_tcb      = CreateObject<TcpSocketState> ();
+  m_tcb->m_currentPacingRate = m_tcb->m_maxPacingRate;
+  // m_pacingTimer.SetFunction (&TdTcpSocketBase::NotifyPacingPerformed, m_meta);
+  if (m_meta->m_congestionControl)
+  {
+    m_congestionControl = m_meta->m_congestionControl->Fork ();
+  }
+
+  if (m_meta->m_recoveryOps)
+  {
+    m_recoveryOps = m_meta->m_recoveryOps->Fork ();
+  }
 }
 
 TdTcpTxSubflow::~TdTcpTxSubflow() 
@@ -66,10 +99,15 @@ TdTcpTxSubflow::ReceivedAck(uint8_t acid, Ptr<Packet> p, const TcpHeader& tcpHea
   uint32_t nbyteToDiscard = sack - oldHeadSequence;
   if (acid != m_subflowid) 
   {
-    m_meta->m_txSubflows[acid]->m_tcb->m_cWnd += nbyteToDiscard;
+    m_meta->m_txsubflows[acid]->m_tcb->m_cWnd += nbyteToDiscard;
   }
 
   m_txBuffer->DiscardUpTo (ackNumber);
+
+  if (SequenceNumber32(sack) > m_highRxAckMark)
+  {
+    m_highRxAckMark = SequenceNumber32(sack);
+  }
 
   // RFC 6675 Section 5: 2nd, 3rd paragraph and point (A), (B) implementation
   // are inside the function ProcessAck
@@ -79,7 +117,7 @@ TdTcpTxSubflow::ReceivedAck(uint8_t acid, Ptr<Packet> p, const TcpHeader& tcpHea
   // inside SendPendingData
   if (m_meta->m_currTxSubflow == m_subflowid)
   {
-    m_meta->SendPendingData (m_connected);
+    m_meta->SendPendingData (m_meta->m_connected);
   }
 }
 
@@ -87,7 +125,7 @@ void
 TdTcpTxSubflow::ProcessAck (const SequenceNumber32 &ackNumber, 
                            const SequenceNumber32 &oldHeadSequence)
 {
-  NS_LOG_FUNCTION (this << ackNumber << scoreboardUpdated);
+  NS_LOG_FUNCTION (this << ackNumber << oldHeadSequence);
   // RFC 6675, Section 5, 2nd paragraph:
   // If the incoming ACK is a cumulative acknowledgment, the TCP MUST
   // reset DupAcks to zero.
@@ -246,12 +284,12 @@ TdTcpTxSubflow::ProcessAck (const SequenceNumber32 &ackNumber,
 
           NS_LOG_DEBUG (" Cong Control Called, cWnd=" << m_tcb->m_cWnd <<
                         " ssTh=" << m_tcb->m_ssThresh);
-          if (!m_sackEnabled)
-            {
-              NS_ASSERT_MSG (m_txBuffer->GetSacked () == 0,
-                             "Some segment got dup-acked in CA_LOSS state: " <<
-                             m_txBuffer->GetSacked ());
-            }
+          // if (!m_sackEnabled)
+          //   {
+          //     NS_ASSERT_MSG (m_txBuffer->GetSacked () == 0,
+          //                    "Some segment got dup-acked in CA_LOSS state: " <<
+          //                    m_txBuffer->GetSacked ());
+          //   }
           NewAck (ackNumber, true);
         }
       else
@@ -387,7 +425,7 @@ TdTcpTxSubflow::EnterRecovery ()
   // (4.2) ssthresh = cwnd = (FlightSize / 2)
   // If SACK is not enabled, still consider the head as 'in flight' for
   // compatibility with old ns-3 versions
-  uint32_t bytesInFlight = m_sackEnabled ? BytesInFlight () : BytesInFlight () + m_tcb->m_segmentSize;
+  uint32_t bytesInFlight = BytesInFlight () + m_tcb->m_segmentSize;
   m_tcb->m_ssThresh = m_congestionControl->GetSsThresh (m_tcb, bytesInFlight);
   m_recoveryOps->EnterRecovery (m_tcb, m_dupAckCount, UnAckDataCount (), m_txBuffer->GetSacked ());
 
@@ -441,12 +479,12 @@ TdTcpTxSubflow::DupAck ()
 
   if (m_tcb->m_congState == TcpSocketState::CA_RECOVERY)
   {
-    if (!m_sackEnabled)
-    {
+    // if (!m_sackEnabled)
+    // {
       // If we are in recovery and we receive a dupack, one segment
       // has left the network. This is equivalent to a SACK of one block.
       m_txBuffer->AddRenoSack ();
-    }
+    // }
     m_recoveryOps->DoRecovery (m_tcb, 0, m_txBuffer->GetSacked ());
     NS_LOG_INFO (m_dupAckCount << " Dupack received in fast recovery mode."
                  "Increase cwnd to " << m_tcb->m_cWnd);
@@ -480,12 +518,12 @@ TdTcpTxSubflow::DupAck ()
       // Not clear in RFC. We don't do this here, since we still have
       // to retransmit the segment.
 
-      if (!m_sackEnabled && m_limitedTx)
-      {
+      // if (!m_sackEnabled && m_limitedTx)
+      // {
         m_txBuffer->AddRenoSack ();
 
         // In limited transmit, cwnd Infl is not updated.
-      }
+      // }
     }
   }
 }
@@ -507,13 +545,14 @@ TdTcpTxSubflow::DoRetransmit ()
     // Therefore, re-send again the head.
     seq = m_txBuffer->HeadSequence ();
   }
-  NS_ASSERT (m_sackEnabled || seq == m_txBuffer->HeadSequence ());
+  //NS_ASSERT (m_sackEnabled || seq == m_txBuffer->HeadSequence ());
+  NS_ASSERT (seq == m_txBuffer->HeadSequence ());
 
   NS_LOG_INFO ("Retransmitting " << seq);
   // Update the trace and retransmit the segment
   m_tcb->m_nextTxSequence = seq;
   uint32_t sz = 
-    SendDataPacket (this, m_tcb->m_nextTxSequence, m_tcb->m_segmentSize, true);
+    SendDataPacket (m_tcb->m_nextTxSequence, m_tcb->m_segmentSize, true);
 
   NS_ASSERT (sz > 0);
 }
@@ -524,7 +563,7 @@ TdTcpTxSubflow::NewAck (SequenceNumber32 const& ack, bool resetRTO)
   NS_LOG_FUNCTION (this << ack);
 
   // Reset the data retransmission count. We got a new ACK!
-  m_dataRetrCount = m_dataRetries;
+  // m_dataRetrCount = m_dataRetries;
 
   // if (m_state != SYN_RCVD && resetRTO)
   // { // Set RTO unless the ACK is received in SYN_RCVD state
@@ -537,7 +576,7 @@ TdTcpTxSubflow::NewAck (SequenceNumber32 const& ack, bool resetRTO)
 
     NS_LOG_LOGIC (this << " Schedule ReTxTimeout at time " <<
                   Simulator::Now ().GetSeconds () << " to expire at time " <<
-                  (Simulator::Now () + m_rto.Get ()).GetSeconds ());
+                  (Simulator::Now () + m_rto).GetSeconds ());
     m_meta->m_retxEvent = Simulator::Schedule (m_rto, &TdTcpSocketBase::ReTxTimeout, m_meta);
   // }
 
@@ -545,15 +584,15 @@ TdTcpTxSubflow::NewAck (SequenceNumber32 const& ack, bool resetRTO)
   NS_LOG_LOGIC ("TCP " << this << " NewAck " << ack <<
                 " numberAck " << (ack - m_txBuffer->HeadSequence ())); // Number bytes ack'ed
 
-  if (GetTxAvailable () > 0)
+  if (m_txBuffer->Available () > 0)
   {
-    NotifySend (GetTxAvailable ());
+    m_meta->NotifySend (m_txBuffer->Available ());
   }
   if (ack > m_tcb->m_nextTxSequence)
   {
     m_tcb->m_nextTxSequence = ack; // If advanced
   }
-  if (m_txBuffer->Size () == 0 && m_state != FIN_WAIT_1 && m_state != CLOSING)
+  if (m_txBuffer->Size () == 0 && m_meta->m_state != TcpSocket::FIN_WAIT_1 && m_meta->m_state != TcpSocket::CLOSING)
   { // No retransmit timer if no data to retransmit
     NS_LOG_LOGIC (this << " Cancelled ReTxTimeout event which was set to expire at " <<
                   (Simulator::Now () + Simulator::GetDelayLeft (m_meta->m_retxEvent)).GetSeconds ());
@@ -570,9 +609,9 @@ TdTcpTxSubflow::SendDataPacket (SequenceNumber32 seq,
 
   bool isRetransmission = false;
   if (seq != m_tcb->m_highTxMark)
-    {
-      isRetransmission = true;
-    }
+  {
+    isRetransmission = true;
+  }
 
   Ptr<Packet> p = m_txBuffer->CopyFromSequence (maxSize, seq);
   uint32_t sz = p->GetSize (); // Size of packet
@@ -580,31 +619,31 @@ TdTcpTxSubflow::SendDataPacket (SequenceNumber32 seq,
   uint32_t remainingData = m_txBuffer->SizeFromSequence (seq + SequenceNumber32 (sz));
 
   if (m_tcb->m_pacing)
+  {
+    NS_LOG_INFO ("Pacing is enabled");
+    if (m_meta->m_pacingTimer.IsExpired ())
     {
-      NS_LOG_INFO ("Pacing is enabled");
-      if (m_meta->m_pacingTimer.IsExpired ())
-        {
-          NS_LOG_DEBUG ("Current Pacing Rate " << m_tcb->m_currentPacingRate);
-          NS_LOG_DEBUG ("Timer is in expired state, activate it " << m_tcb->m_currentPacingRate.CalculateBytesTxTime (sz));
-          m_meta->m_pacingTimer.Schedule (m_tcb->m_currentPacingRate.CalculateBytesTxTime (sz));
-        }
-      else
-        {
-          NS_LOG_INFO ("Timer is already in running state");
-        }
+      NS_LOG_DEBUG ("Current Pacing Rate " << m_tcb->m_currentPacingRate);
+      NS_LOG_DEBUG ("Timer is in expired state, activate it " << m_tcb->m_currentPacingRate.CalculateBytesTxTime (sz));
+      m_meta->m_pacingTimer.Schedule (m_tcb->m_currentPacingRate.CalculateBytesTxTime (sz));
     }
+    else
+    {
+      NS_LOG_INFO ("Timer is already in running state");
+    }
+  }
 
   m_meta->AddSocketTags (p);
   
   TdTcpMapping mapping;
-  bool result = m_txMappings.GetMappingForSSN(seq, mapping);
+  bool result = m_TxMappings.GetMappingForSSN(seq, mapping);
   if (!result)
   {
-    m_txMappings.Dump();
+    m_TxMappings.Dump();
     NS_FATAL_ERROR("Could not find mapping associated to ssn");
   }
   SequenceNumber32 dseq;
-  result = TranslateSSNToDSN(seq, dseq);
+  result = mapping.TranslateSSNToDSN(seq, dseq);
   if (!result)
   {
     NS_FATAL_ERROR("Could not translate mapping associated to ssn");
@@ -612,23 +651,24 @@ TdTcpTxSubflow::SendDataPacket (SequenceNumber32 seq,
 
   TcpHeader header;
   header.SetFlags (flags);
-  header.SetSequenceNumber (seq);
-  header.SetAckNumber (meta->m_rxBuffer->NextRxSequence ());
+  header.SetSequenceNumber (dseq);
+  header.SetAckNumber (m_meta->m_rxBuffer->NextRxSequence ());
 
-  if (m_endPoint)
+  if (m_meta->m_endPoint)
   {
-    header.SetSourcePort (m_endPoint->GetLocalPort ());
-    header.SetDestinationPort (m_endPoint->GetPeerPort ());
+    header.SetSourcePort (m_meta->m_endPoint->GetLocalPort ());
+    header.SetDestinationPort (m_meta->m_endPoint->GetPeerPort ());
   }
   else
   {
-    header.SetSourcePort (m_endPoint6->GetLocalPort ());
-    header.SetDestinationPort (m_endPoint6->GetPeerPort ());
+    header.SetSourcePort (m_meta->m_endPoint6->GetLocalPort ());
+    header.SetDestinationPort (m_meta->m_endPoint6->GetPeerPort ());
   }
-  header.SetWindowSize (AdvertisedWindowSize ());
+  header.SetWindowSize (m_meta->AdvertisedWindowSize ());
 
   // AddOptions (header);
-  AddTdDSS(header);
+  m_meta->AddOptionTdTcpDSS(header, true, m_subflowid, m_meta->m_currTxSubflow, seq.GetValue(),
+                                false, 0, 0, 0);
 
   if (m_meta->m_retxEvent.IsExpired ())
   {
@@ -636,23 +676,24 @@ TdTcpTxSubflow::SendDataPacket (SequenceNumber32 seq,
 
     NS_LOG_LOGIC (this << " SendDataPacket Schedule ReTxTimeout at time " <<
                   Simulator::Now ().GetSeconds () << " to expire at time " <<
-                  (Simulator::Now () + m_rto.Get ()).GetSeconds () );
-    m_meta->m_retxEvent = Simulator::Schedule (m_rto, &TdTcpTxSubflow::ReTxTimeout, this);
+                  (Simulator::Now () + m_rto).GetSeconds () );
+    m_meta->m_retxEvent = Simulator::Schedule (m_rto, &TdTcpSocketBase::ReTxTimeout, m_meta);
   }
 
-  if (m_meta->m_currentTxSubflow != m_subflowid)
+  if (m_meta->m_currTxSubflow != m_subflowid)
   {
-    Ptr<TdTcpTxSubflow> carrier = m_meta->m_txSubflows[m_meta->m_currentTxSubflow];
+    Ptr<TdTcpTxSubflow> carrier = m_meta->m_txsubflows[m_meta->m_currTxSubflow];
     uint32_t carrierCWND = carrier->m_tcb->m_cWnd;
-    carrier->m_tcb->m_cWnd = Max(carrierCWND - sz, 2*carrier->m_tcb->m_segmentSize);
+    carrier->m_tcb->m_cWnd = std::max(carrierCWND - sz, 2*carrier->m_tcb->m_segmentSize);
+    isRetransmission = true;
   }
 
-  m_meta->m_txTrace (p, header, this);
+  m_meta->m_txTrace (p, header, m_meta);
 
   if (m_meta->m_endPoint)
   {
     m_meta->m_tcp->SendPacket (p, header, m_meta->m_endPoint->GetLocalAddress (),
-                         m_meta->m_endPoint->GetPeerAddress (), m_boundnetdevice);
+                         m_meta->m_endPoint->GetPeerAddress (), m_meta->m_boundnetdevice);
     NS_LOG_DEBUG ("Send segment of size " << sz << " with remaining data " <<
                     remainingData << " via TcpL4Protocol to " <<  m_meta->m_endPoint->GetPeerAddress () <<
                     ". Header " << header);
@@ -660,7 +701,7 @@ TdTcpTxSubflow::SendDataPacket (SequenceNumber32 seq,
   else
   {
     m_meta->m_tcp->SendPacket (p, header, m_meta->m_endPoint6->GetLocalAddress (),
-                       m_meta->m_endPoint6->GetPeerAddress (), m_boundnetdevice);
+                       m_meta->m_endPoint6->GetPeerAddress (), m_meta->m_boundnetdevice);
     NS_LOG_DEBUG ("Send segment of size " << sz << " with remaining data " <<
                   remainingData << " via TcpL4Protocol to " <<  m_meta->m_endPoint6->GetPeerAddress () <<
                     ". Header " << header);
@@ -686,7 +727,7 @@ TdTcpTxSubflow::SendDataPacket (SequenceNumber32 seq,
 }
 
 uint32_t
-TdTcpSubflow::AvailableWindow () const
+TdTcpTxSubflow::AvailableWindow () const
 {
   uint32_t win = Window ();             // Number of bytes allowed to be outstanding
   uint32_t inflight = BytesInFlight (); // Number of outstanding bytes
@@ -694,10 +735,93 @@ TdTcpSubflow::AvailableWindow () const
 }
 
 uint32_t
-TcpSocketBase::Window (void) const
+TdTcpTxSubflow::Window (void) const
 {
   return std::min (m_meta->m_rWnd.Get (), m_tcb->m_cWnd.Get ());
 }
 
+uint32_t
+TdTcpTxSubflow::SafeSubtraction (uint32_t a, uint32_t b)
+{
+  if (a > b)
+    {
+      return a-b;
+    }
+
+  return 0;
+}
+
+uint32_t
+TdTcpTxSubflow::BytesInFlight () const
+{
+  uint32_t bytesInFlight = m_txBuffer->BytesInFlight ();
+  // Ugly, but we are not modifying the state; m_bytesInFlight is used
+  // only for tracing purpose.
+  m_tcb->m_bytesInFlight = bytesInFlight;
+
+  NS_LOG_DEBUG ("Returning calculated bytesInFlight: " << bytesInFlight);
+  return bytesInFlight;
+}
+
+uint32_t
+TdTcpTxSubflow::UnAckDataCount () const
+{
+  return m_tcb->m_highTxMark - m_txBuffer->HeadSequence ();
+}
+
+void
+TdTcpTxSubflow::UpdateRttHistory (const SequenceNumber32 &seq, uint32_t sz,
+                                 bool isRetransmission)
+{
+  NS_LOG_FUNCTION (this);
+
+  // update the history of sequence numbers used to calculate the RTT
+  if (isRetransmission == false)
+  { // This is the next expected one, just log at end
+    m_history.push_back (RttHistory (seq, sz, Simulator::Now ()));
+  }
+  else
+  { // This is a retransmit, find in list and mark as re-tx
+    for (std::deque<RttHistory>::iterator i = m_history.begin (); i != m_history.end (); ++i)
+    {
+      if ((seq >= i->seq) && (seq < (i->seq + SequenceNumber32 (i->count))))
+      { // Found it
+        i->retx = true;
+        i->count = ((seq + SequenceNumber32 (sz)) - i->seq); // And update count in hist
+        break;
+      }
+    }
+  }
+}
+
+bool
+TdTcpTxSubflow::AddLooseMapping(SequenceNumber32 dsnHead, uint16_t length)
+{
+  NS_LOG_LOGIC("Adding mapping with dsn=" << dsnHead << " len=" << length);
+  TdTcpMapping mapping;
+
+  mapping.MapToSSN(FirstUnmappedSSN());
+  mapping.SetMappingSize(length);
+  mapping.SetHeadDSN(dsnHead);
+  bool ok = m_TxMappings.AddMapping( mapping  );
+  NS_ASSERT_MSG( ok, "Can't add mapping: 2 mappings overlap");
+  return ok;
+}
+
+SequenceNumber32
+TdTcpTxSubflow::FirstUnmappedSSN()
+{
+  NS_LOG_FUNCTION(this);
+  SequenceNumber32 ssn;
+  if(!m_TxMappings.FirstUnmappedSSN(ssn))
+  {
+    ssn = m_txBuffer->TailSequence();
+  }
+  else 
+  {
+    NS_FATAL_ERROR ("Bad");
+  }
+  return ssn;
+}
 
 }

@@ -100,6 +100,12 @@ public:
    */
   virtual Ptr<NetDevice> GetDevice (std::size_t i) const;
 
+  /**
+   * \brief Set the delay associated with this channel
+   * \param t time to set
+   */
+  void SetDelay (const Time & t);
+
 protected:
   /**
    * \brief Get the delay associated with this channel
@@ -144,31 +150,13 @@ protected:
     (Ptr<const Packet> packet,
      Ptr<NetDevice> txDevice, Ptr<NetDevice> rxDevice,
      Time duration, Time lastBitTime);
+
                     
-private:
   /** Each point to point link has exactly two net devices. */
   static const std::size_t N_DEVICES = 2;
 
   Time          m_delay;    //!< Propagation delay
   std::size_t        m_nDevices; //!< Devices of this channel
-
-  /**
-   * The trace source for the packet transmission animation events that the 
-   * device can fire.
-   * Arguments to the callback are the packet, transmitting
-   * net device, receiving net device, transmission time and 
-   * packet receipt time.
-   *
-   * \see class CallBackTraceSource
-   * \deprecated The non-const \c Ptr<NetDevice> argument is deprecated
-   * and will be changed to \c Ptr<const NetDevice> in a future release.
-   */
-  TracedCallback<Ptr<const Packet>,     // Packet being transmitted
-                 Ptr<NetDevice>,  // Transmitting NetDevice
-                 Ptr<NetDevice>,  // Receiving NetDevice
-                 Time,                  // Amount of time to transmit the pkt
-                 Time                   // Last bit receive time (relative to now)
-                 > m_txrxPointToPoint;
 
   /** \brief Wire states
    *
@@ -202,8 +190,26 @@ public:
   };
 
   Link    m_link[N_DEVICES]; //!< Link model
-};
 
+  /**
+   * The trace source for the packet transmission animation events that the 
+   * device can fire.
+   * Arguments to the callback are the packet, transmitting
+   * net device, receiving net device, transmission time and 
+   * packet receipt time.
+   *
+   * \see class CallBackTraceSource
+   * \deprecated The non-const \c Ptr<NetDevice> argument is deprecated
+   * and will be changed to \c Ptr<const NetDevice> in a future release.
+   */
+  TracedCallback<Ptr<const Packet>,     // Packet being transmitted
+                 Ptr<NetDevice>,  // Transmitting NetDevice
+                 Ptr<NetDevice>,  // Receiving NetDevice
+                 Time,                  // Amount of time to transmit the pkt
+                 Time                   // Last bit receive time (relative to now)
+                 > m_txrxPointToPoint;
+
+};
 } // namespace ns3
 
 #endif /* POINT_TO_POINT_CHANNEL_H */

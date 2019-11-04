@@ -318,7 +318,7 @@ MpTcpSocketBase::OnSubflowClosed(Ptr<MpTcpSubflow> subflow, bool reset)
   {
     NS_FATAL_ERROR("Case not handled yet.");
   }
-  SubflowList::iterator it = std::remove(m_subflows[Closing].begin(), m_subflows[Closing].end(), subflow);
+  std::remove(m_subflows[Closing].begin(), m_subflows[Closing].end(), subflow);
 }
 
 void

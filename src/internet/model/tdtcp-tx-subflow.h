@@ -32,18 +32,26 @@
 #include "ns3/node.h"
 #include "ns3/tcp-socket-state.h"
 #include "ns3/ipv4-end-point.h"
-#include "tcp-tx-buffer.h"
-#include "tdtcp-mapping.h"
-#include "tdtcp-socket-base.h"
+#include "ns3/tcp-tx-buffer.h"
+#include "ns3/tdtcp-mapping.h"
+#include "ns3/tdtcp-socket-base.h"
+
 
 namespace ns3 {
 
-class TdTcpTxSubflow {
+class TdTcpTxSubflow : public Object {
 
   friend class TdTcpSocketBase;
   friend class TdTcpRxSubflow;
 
 public:
+
+  static TypeId GetdTypeId (void);
+  TypeId GetInstanceTypeId ();
+
+  // nobody should call the default constructor
+  TdTcpTxSubflow () = default;
+
   TdTcpTxSubflow (uint8_t id, Ptr<TdTcpSocketBase> tdtcp);
   ~TdTcpTxSubflow();
 
@@ -54,7 +62,7 @@ public:
 
 
   // Received Ack relevant
-  void ReceivedAck(Ptr<Packet>, const TcpHeader&); // Received an ACK packet
+  void ReceivedAck(uint8_t acid, Ptr<Packet> p, const TcpHeader& tcpHeader, SequenceNumber32 sack); // Received an ACK packet
   void ProcessAck (const SequenceNumber32 &ackNumber, 
                   const SequenceNumber32 &oldHeadSequence);
   void EnterRecovery ();
@@ -65,19 +73,39 @@ public:
   uint32_t AvailableWindow () const;
   uint32_t Window (void) const;
 
+  uint32_t SafeSubtraction (uint32_t a, uint32_t b);
+  uint32_t BytesInFlight () const;
+  uint32_t UnAckDataCount () const;
+  void UpdateRttHistory (const SequenceNumber32 &seq, uint32_t sz,
+                                 bool isRetransmission);
+  bool AddLooseMapping(SequenceNumber32 dsnHead, uint16_t length);
+  SequenceNumber32 FirstUnmappedSSN();
+
 private:
 
   uint8_t m_subflowid;
 
   Ptr<TdTcpSocketBase> m_meta;
   Ptr<RttEstimator> m_rtt; //!< Round trip time estimator
+  std::deque<RttHistory>      m_history;         //!< List of sent packet
+
+
+  Time              m_rto     {Seconds (0.0)}; //!< Retransmit timeout
+  Time              m_minRto  {Time::Max ()};   //!< minimum value of the Retransmit timeout
+  Time              m_clockGranularity {Seconds (0.001)}; //!< Clock Granularity used in RTO calcs
 
   Ptr<TcpTxBuffer> m_txBuffer; //!< Tx buffer
+
+  uint32_t m_dupAckCount {0};
+  SequenceNumber32 m_highRxAckMark {0}; //!< Highest ack received
 
   // Fast Retransmit and Recovery
   SequenceNumber32       m_recover    {0};   //!< Previous highest Tx seqnum for fast recovery (set it to initial seq number)
   uint32_t               m_retxThresh {3};   //!< Fast Retransmit threshold
   bool                   m_limitedTx  {true}; //!< perform limited transmit
+
+  uint32_t         m_bytesAckedNotProcessed  {0};  //!< Bytes acked, but not processed
+  bool m_isFirstPartialAck {true};
 
   // Transmission Control Block
   Ptr<TcpSocketState>    m_tcb;               //!< Congestion control information

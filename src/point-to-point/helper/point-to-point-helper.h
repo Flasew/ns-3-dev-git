@@ -88,6 +88,11 @@ public:
   void SetDeviceAttribute (std::string name, const AttributeValue &value);
 
   /**
+   * 
+   */
+  void SetChannelType (std::string name);
+
+  /**
    * Set an attribute value to be propagated to each Channel created by the
    * helper.
    *
@@ -184,7 +189,11 @@ private:
   ObjectFactory m_queueFactory;         //!< Queue Factory
   ObjectFactory m_channelFactory;       //!< Channel Factory
   ObjectFactory m_remoteChannelFactory; //!< Remote Channel Factory
+  ObjectFactory m_orderedChannelFactory;//!< Ordered Channel Factory
   ObjectFactory m_deviceFactory;        //!< Device Factory
+
+  std::string m_channelType = "PointToPointChannel"; 
+  bool m_delayedDev = false; 
 };
 
 } // namespace ns3

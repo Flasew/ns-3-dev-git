@@ -47,6 +47,23 @@ GetMapping(uint32_t dseq, uint32_t sseq, uint16_t length)
   return mapping;
 }
 
+TypeId 
+TdTcpRxSubflow::GetdTypeId (void)
+{
+  static TypeId tid = TypeId ("ns3::TdTcpRxSubflow")
+    .SetParent<Object> ()
+    .SetGroupName ("Internet")
+    .AddConstructor<TdTcpRxSubflow> ()
+  ;
+  return tid;
+}
+
+TypeId 
+TdTcpRxSubflow::GetInstanceTypeId ()
+{
+  return TdTcpRxSubflow::GetTypeId();
+}
+
 TdTcpRxSubflow::TdTcpRxSubflow(uint8_t id, Ptr<TdTcpSocketBase> tdtcp)
 {
   m_meta = tdtcp;
@@ -88,7 +105,7 @@ TdTcpRxSubflow::ReceivedData (Ptr<Packet> p, const TcpHeader& tcpHeader, Sequenc
   // Notify app to receive if necessary
   if (expectedSSN < m_rxBuffer->NextRxSequence())
   { // NextRxSeq advanced, we have something to send to the app
-    m_meta->OnSubflowReceive(packet, tcpHeader, this, m_rxBuffer->NextRxSequence().GetValue());
+    m_meta->OnSubflowReceive(p, tcpHeader, this, m_rxBuffer->NextRxSequence().GetValue());
   }
   m_meta->SendAckPacket(m_subflowid, scid,
                         m_rxBuffer->NextRxSequence().GetValue());
@@ -107,7 +124,7 @@ TdTcpRxSubflow::ExtractAtMostOneMapping(uint32_t maxSize, bool only_full_mapping
     return p;
   }
   else
-m_rxBuffer->Available ()  {
+  {
     NS_LOG_LOGIC(rxAvailable  << " Rx available");
   }
 

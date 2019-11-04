@@ -146,6 +146,18 @@ TcpOptionTdTcpCapable::operator== (const TcpOptionTdTcpCapable& opt) const
   return (m_nsubflows == opt.m_nsubflows);
 }
 
+void 
+TcpOptionTdTcpCapable::SetNSubflows (const uint8_t& nSubflows)
+{
+  m_nsubflows = nSubflows;
+}
+
+uint8_t 
+TcpOptionTdTcpCapable::GetNSubflows (void) const
+{
+  return m_nsubflows;
+}
+
 void
 TcpOptionTdTcpCapable::Print (std::ostream &os) const
 {
@@ -177,7 +189,7 @@ TcpOptionTdTcpCapable::Deserialize (Buffer::Iterator i)
 }
 
 uint32_t
-TcpOptionMpTcpCapable::GetSerializedSize (void) const
+TcpOptionTdTcpCapable::GetSerializedSize (void) const
 {
   return 4;
 }
@@ -190,10 +202,10 @@ TcpOptionTdTcpDSS::TcpOptionTdTcpDSS ()
   : TcpOptionTdTcp (),
     m_hasdata (false),
     m_hasack (false),
-    m_dcarrier (0),
-    m_acarrier (0),
     m_dsubflowid (0),
     m_asubflowid (0),
+    m_dcarrier (0),
+    m_acarrier (0),
     m_dataseq (0),
     m_acknum (0)
 {
@@ -274,19 +286,20 @@ TcpOptionTdTcpDSS::SetAckCarrier(const uint8_t &carrier)
 }
 
 bool 
-TcpOptionTdTcpDSS::GetData (uint8_t& subflowId, uint32_t & seq)
+TcpOptionTdTcpDSS::GetData (uint8_t&& subflowId, uint8_t && carrierId, uint32_t & seq) const
 {
   NS_LOG_FUNCTION (this);
   if (!m_hasdata)
     return false;
 
   subflowId = m_dsubflowid;
+  carrierId = m_dcarrier;
   seq = m_dataseq;
   return true;
 }
 
 bool 
-TcpOptionTdTcpDSS::GetAck (uint8_t& subflowId, uint32_t & ack)
+TcpOptionTdTcpDSS::GetAck (uint8_t&& subflowId, uint8_t && carrierId, uint32_t & ack) const
 {
   NS_LOG_FUNCTION (this);
 
@@ -294,12 +307,13 @@ TcpOptionTdTcpDSS::GetAck (uint8_t& subflowId, uint32_t & ack)
     return false;
 
   subflowId = m_asubflowid;
+  carrierId = m_acarrier;
   ack = m_acknum;
   return true;
 }
 
 bool 
-TcpOptionTdTcpDSS::GetDataCarrier(uint8_t &carrier)
+TcpOptionTdTcpDSS::GetDataCarrier(uint8_t &carrier) const
 {
   NS_LOG_FUNCTION (this);
   if (!m_hasdata)
@@ -310,7 +324,7 @@ TcpOptionTdTcpDSS::GetDataCarrier(uint8_t &carrier)
 }
 
 bool 
-TcpOptionTdTcpDSS::GetAckCarrier(uint8_t &carrier)
+TcpOptionTdTcpDSS::GetAckCarrier(uint8_t &carrier) const
 {
   NS_LOG_FUNCTION (this);
   if (!m_hasack)
@@ -346,7 +360,7 @@ TcpOptionTdTcpDSS::Serialize (Buffer::Iterator i) const
   TcpOptionTdTcp::SerializeRef (i);
 
   uint8_t subtypeAndFlag = (GetSubType () << 4) 
-    | (m_hasdata ? (TD_DATA) : 0) | (m_hasack ? (TD_ACK) : 0);
+    | (m_hasdata ? (TcpOptionTdTcpDSS::TD_DATA) : 0) | (m_hasack ? (TcpOptionTdTcpDSS::TD_ACK) : 0);
 
   i.WriteU8(subtypeAndFlag); // Kind
   i.WriteU8(m_dsubflowid);
@@ -365,12 +379,12 @@ TcpOptionTdTcpDSS::Deserialize (Buffer::Iterator i)
   NS_ASSERT (length == 16);
 
   uint8_t subtypeAndFlag = i.ReadU8();
-  NS_ASSERT ( subtype >> 4 == GetSubType () );
+  NS_ASSERT ( subtypeAndFlag >> 4 == GetSubType () );
 
-  m_hasdata = subtypeAndFlag & TD_DATA;
-  m_hasack = subtypeAndFlag & TD_ACK;
+  m_hasdata = subtypeAndFlag & TcpOptionTdTcpDSS::TD_DATA;
+  m_hasack = subtypeAndFlag & TcpOptionTdTcpDSS::TD_ACK;
 
-  uint8_t unused = i.ReadU8();
+  i.ReadU8();
 
   m_dsubflowid = i.ReadU8();
   m_dcarrier   = i.ReadU8();
@@ -383,8 +397,8 @@ TcpOptionTdTcpDSS::Deserialize (Buffer::Iterator i)
   return length;
 }
 
-TcpOptionTdTcpDSS::TcpOptionTdTcpClose ()
-  : TcpOptionTdTcp (),
+TcpOptionTdTcpClose::TcpOptionTdTcpClose ()
+  : TcpOptionTdTcp(),
     m_subflowid (0),
     m_lastseq (0)
 {
@@ -421,7 +435,7 @@ TcpOptionTdTcpClose::GetSerializedSize (void) const
 bool 
 TcpOptionTdTcpClose::operator== (const TcpOptionTdTcpClose& other) const
 {
-  return (m_subflowid == other.subflowid) 
+  return (m_subflowid == other.m_subflowid) 
       && (m_lastseq == other.m_lastseq);
 }
 

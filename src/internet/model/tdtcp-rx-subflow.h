@@ -22,6 +22,7 @@
 #define TDTCP_RX_SUBFLOW_H
 
 #include "ns3/trace-source-accessor.h"
+#include "ns3/ptr.h"
 #include "ns3/sequence-number.h"
 #include "ns3/rtt-estimator.h"
 #include "ns3/event-id.h"
@@ -31,14 +32,23 @@
 #include "ns3/ipv4-address.h"
 #include "ns3/tcp-socket-base.h"
 #include "ns3/tcp-header.h"
-#include "tdtcp-mapping.h"
-#include "tdtcp-socket-base.h"
+#include "ns3/tdtcp-mapping.h"
+#include "ns3/tdtcp-socket-base.h"
 
 namespace ns3 {
 
-class TdTcpRxSubflow {
+class TdTcpRxSubflow: public Object {
+
+  friend class TdTcpSocketBase;
+  friend class TdTcpTxSubflow;
 
 public:
+  static TypeId GetdTypeId (void);
+  TypeId GetInstanceTypeId ();
+
+  // nobody should call the default constructor...
+  TdTcpRxSubflow() = default;
+  
   TdTcpRxSubflow(uint8_t id, Ptr<TdTcpSocketBase> tdtcp);
   ~TdTcpRxSubflow();
 
