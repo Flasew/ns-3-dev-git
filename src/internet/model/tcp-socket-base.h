@@ -1308,7 +1308,6 @@ protected:
 
   // TDTCP variables
   bool m_tdtcpEnabled {true};
-  uint8_t m_tdNSubflows {2};
 
   // Options
   bool    m_sackEnabled       {true}; //!< RFC SACK option enabled

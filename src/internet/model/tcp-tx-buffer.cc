@@ -217,6 +217,8 @@ TcpTxBuffer::CopyFromSequence (uint32_t numBytes, const SequenceNumber32& seq)
 {
   NS_LOG_FUNCTION (this << numBytes << seq);
 
+  NS_LOG_LOGIC ("m_firstByteSeq: " << m_firstByteSeq << " m_sentSize: " << m_sentSize);
+
   NS_ABORT_MSG_IF (m_firstByteSeq > seq,
                    "Requested a sequence number which is not in the buffer anymore");
   ConsistencyCheck ();
@@ -1340,7 +1342,10 @@ void
 TcpTxBuffer::AddRenoSack (void)
 {
   NS_LOG_FUNCTION (this);
-  NS_ASSERT (m_sentList.size () > 1);
+  if (m_sentList.size () <= 1)
+  {
+    return;
+  }
 
   m_renoSack = true;
 

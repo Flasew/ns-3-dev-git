@@ -245,6 +245,8 @@ void BulkSendApplication::SendData (void)
           m_totBytes += actual;
           m_txTrace (packet);
         }
+      NS_LOG_LOGIC ("BulkSend: toSend=" << toSend << 
+                    " actual=" << actual << " m_totBytes=" << m_totBytes);
       // We exit this loop when actual < toSend as the send side
       // buffer is full. The "DataSent" callback will pop when
       // some buffer space has freed ip.

@@ -2145,7 +2145,10 @@ TcpSocketBase::ForkTD()
   Callback<bool, Ptr<Socket>, const Address &> connectionRequest = this->m_connectionRequest;
   Callback<void, Ptr<Socket>, const Address&> newConnectionCreated = this->m_newConnectionCreated;
 
-  Ptr<TdTcpSocketBase> socket = CreateObject<TdTcpSocketBase>(*this);
+  // Ptr<TcpSocketBase> temp = CopyObject<TcpSocketBase>(this);
+  // temp->m_state = TcpSocket::CLOSED;
+  TdTcpSocketBase * td = new TdTcpSocketBase(*this);
+  Ptr<TdTcpSocketBase> socket = Ptr<TdTcpSocketBase>(td, true);
 
   bool result = m_tcp->AddSocket(socket);
   NS_ASSERT_MSG(result, "Could not register TD socket");
@@ -2236,7 +2239,7 @@ TcpSocketBase::UpgradeToTd()
   Ptr<TcpL4Protocol> tcp = this->m_tcp;
   auto node = GetNode();
 
-  auto temp = this->fork();
+  auto temp = this->Fork();
 
   // I don't want the destructor to be called in that moment
   TdTcpSocketBase* meta = new (this) TdTcpSocketBase(*temp);

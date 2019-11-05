@@ -69,6 +69,7 @@ TdTcpRxSubflow::TdTcpRxSubflow(uint8_t id, Ptr<TdTcpSocketBase> tdtcp)
   m_meta = tdtcp;
   m_subflowid = id;
   m_rxBuffer = CreateObject<TcpRxBuffer> ();
+  m_rxBuffer->SetMaxBufferSize(m_meta->m_rxBuffer->MaxBufferSize());
 }
 
 TdTcpRxSubflow::~TdTcpRxSubflow()
@@ -76,10 +77,11 @@ TdTcpRxSubflow::~TdTcpRxSubflow()
 
 }
 
+
 void 
 TdTcpRxSubflow::ReceivedData (Ptr<Packet> p, const TcpHeader& tcpHeader, SequenceNumber32 sseq, uint8_t scid)
 {
-
+  NS_LOG_FUNCTION (this << p << tcpHeader << sseq << scid);
   TdTcpMapping mapping;
 
   // OutOfRange

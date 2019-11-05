@@ -23,6 +23,7 @@
 #include "tcp-header.h"
 #include "tcp-option.h"
 #include "tcp-option-mptcp.h"
+#include "tcp-option-tdtcp.h"
 #include "ns3/buffer.h"
 #include "ns3/address-utils.h"
 #include "ns3/log.h"
@@ -399,6 +400,13 @@ TcpHeader::Deserialize (Buffer::Iterator start)
           uint8_t subtype = i.ReadU8() >> 4;  // read MPTCP subtype
           i.Prev(3); // revert the iterator back to where it should be
           op = TcpOptionMpTcpMain::CreateMpTcpOption(subtype);
+        }
+      if ( kind == TcpOption::TDTCP)
+        {
+          i.ReadU16(); // skip TCP kind & length
+          uint8_t subtype = i.ReadU8() >> 4;  // read TDTCP subtype
+          i.Prev(3); // revert the iterator back to where it should be
+          op = TcpOptionTdTcpMain::CreateTdTcpOption(subtype);
         }
       else if (TcpOption::IsKindKnown (kind))
         {

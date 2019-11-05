@@ -192,6 +192,8 @@ bool tjitter_enable = true;
 
 std::default_random_engine  gen;
 
+std::vector<Ptr<TdTcpSocketBase>> sockets;
+
 int curr_rate = 0;
 
 void CycleRate() {
@@ -206,6 +208,10 @@ void CycleRate() {
     if ((jit) < 0 && (uint64_t)(-(jit*2)) >= t)
       jit = 0;
     t = t + jit;
+  }
+
+  for (auto & s: sockets) {
+    s->ChangeActivateSubflow((uint8_t)curr_rate);
   }
 
   Simulator::Schedule(MicroSeconds(t), CycleRate);
@@ -303,7 +309,19 @@ void ParseBWP(std::string & p)
   int main(int argc, char * argv[]) {
 
     // Config::SetDefault ("ns3::Ipv4GlobalRouting::RespondToInterfaceEvents", BooleanValue (true));
-    LogComponentEnable("TcpCongestionOps", LOG_LEVEL_INFO);
+    // LogComponentEnable("TcpCongestionOps", LOG_LEVEL_INFO);
+    LogComponentEnable("TdTcpSocketBase", LOG_ALL);
+    LogComponentEnable("TcpSocketBase", LOG_ALL);
+    LogComponentEnable("TdTcpTxSubflow", LOG_ALL);
+    LogComponentEnable("TdTcpRxSubflow", LOG_ALL);
+    LogComponentEnable("TdTcpMapping", LOG_ALL);
+    LogComponentEnable("TcpOptionTdTcp", LOG_ALL);
+    LogComponentEnable("TcpOption", LOG_ALL);
+    LogComponentEnable("TcpHeader", LOG_ALL);
+    LogComponentEnable("TcpTxBuffer", LOG_ALL);
+    LogComponentEnable("TCP_LARGE_TRANSFER", LOG_LEVEL_INFO);
+    LogComponentEnable("PacketSink", LOG_ALL);
+    LogComponentEnable("BulkSendApplication", LOG_ALL);
 
     CommandLine cmd;
     cmd.AddValue("BWP", "Bandwidth pattern", bwt_str);
@@ -388,10 +406,11 @@ void ParseBWP(std::string & p)
   config << "\t]," << std::endl;  
 
   Time::SetResolution(Time::NS);
-  LogComponentEnable("TCP_LARGE_TRANSFER", LOG_LEVEL_INFO);
-  LogComponentEnable("PacketSink", LOG_LEVEL_INFO);
-  LogComponentEnable("BulkSendApplication", LOG_LEVEL_INFO);
 
+  Config::SetDefault ("ns3::TcpSocketState::MaxPacingRate", StringValue ("10Gbps"));
+  Config::SetDefault ("ns3::TcpSocketState::EnablePacing", BooleanValue (true));
+
+  sockets = std::vector<Ptr<TdTcpSocketBase>>();
   //Packet::EnablePrinting();
 
   TopoHelper::Init(4);
@@ -440,7 +459,9 @@ void ParseBWP(std::string & p)
   lodata = std::vector<uint64_t>(nflows*2, 0);
   syndata = std::vector<uint64_t>(nflows*2, 0);
 
-  Config::SetDefault("ns3::TcpSocket::SegmentSize", UintegerValue (1448));
+  Config::SetDefault("ns3::TcpSocket::SegmentSize", UintegerValue (1424));
+  Config::SetDefault ("ns3::TcpSocketBase::Sack", BooleanValue (false));
+  Config::SetDefault ("ns3::TcpSocketBase::Timestamp", BooleanValue (true));
 
   Config::SetDefault("ns3::TcpSocket::SndBufSize", UintegerValue (rwnd));
   Config::SetDefault("ns3::TcpSocket::RcvBufSize", UintegerValue (rwnd));
@@ -460,13 +481,19 @@ void ParseBWP(std::string & p)
   for (uint64_t j = 0; j < nflows; j++) {
     i++;
 
-    Ptr<Socket> ns3TcpSocket = Socket::CreateSocket (TopoHelper::allNodes.Get(0), TcpSocketFactory::GetTypeId());
+    //Ptr<TdTcpSocketBase> ns3TcpSocket = CreateObject<TdTcpSocketBase>(TopoHelper::allNodes.Get(1));
+    //Ptr<Socket> ns3TcpSocket = Socket::CreateSocket (TopoHelper::allNodes.Get(0), TcpSocketFactory::GetTypeId());
     //Ptr<TcpRecoveryOps> rec = CreateObject<TcpPrrRecovery>();
-    Ptr<TcpSocketBase> sb = DynamicCast<TcpSocketBase>(ns3TcpSocket);
+    //Ptr<TcpSocketBase> sb = DynamicCast<TcpSocketBase>(ns3TcpSocket);
     //sb->SetRecoveryAlgorithm(rec);
+    Ptr<TcpL4Protocol> tcp = TopoHelper::allNodes.Get(0)->GetObject<TcpL4Protocol>();
+    Ptr<Socket> ns3TcpSocket = tcp->CreateSocket (TcpNewReno::GetTypeId(), TdTcpSocketBase::GetTypeId(), true);
+    Ptr<TdTcpSocketBase> sb = DynamicCast<TdTcpSocketBase>(ns3TcpSocket);
     sb->SetRetxThresh(dupackth);
 
-    ns3TcpSocket->Bind(InetSocketAddress(sendPortBase+i));
+    sockets.push_back(sb);
+
+    std::cout << ns3TcpSocket->Bind(InetSocketAddress(sendPortBase+i)) << std::endl;
 
     ns3TcpSocket->TraceConnect("CongestionWindow", std::to_string(i),  MakeCallback (&CwndTrace));
     ns3TcpSocket->TraceConnect("CongState", std::to_string(i),  MakeCallback (&CongStateTrace));
@@ -519,8 +546,21 @@ void ParseBWP(std::string & p)
 
   PacketSinkHelper sink("ns3::TcpSocketFactory",
     InetSocketAddress (Ipv4Address::GetAny(), portInit));
-  ApplicationContainer sinkAppr = sink.Install(TopoHelper::allNodes.Get(1));
-  sinkAppr.Start (Seconds (0.0));
+  // ApplicationContainer sinkAppr = sink.Install(TopoHelper::allNodes.Get(1));
+  // sinkAppr.Start (Seconds (0.0));
+  Ptr<TcpL4Protocol> tcp = TopoHelper::allNodes.Get(1)->GetObject<TcpL4Protocol>();
+  Ptr<Socket> ns3TcpSocket = tcp->CreateSocket (TcpNewReno::GetTypeId(), TdTcpSocketBase::GetTypeId(), true);
+  Ptr<TdTcpSocketBase> sb = DynamicCast<TdTcpSocketBase>(ns3TcpSocket);
+  Ptr<PacketSink> app = CreateObject<PacketSink> ();
+  std::cout << "sink bind: " << ns3TcpSocket->Bind(InetSocketAddress(portInit)) << std::endl;
+  app->SetUp(ns3TcpSocket, Ipv4Address::GetAny(), true);
+
+  sockets.push_back(sb);
+
+  TopoHelper::allNodes.Get(1)->AddApplication(app);
+
+  app->SetStartTime (MicroSeconds (0));
+
   if (bidir) {
     ApplicationContainer sinkAppl = sink.Install(TopoHelper::allNodes.Get(0));
     sinkAppl.Start (Seconds (0.0));

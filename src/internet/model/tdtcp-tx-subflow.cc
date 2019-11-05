@@ -66,17 +66,32 @@ TdTcpTxSubflow::TdTcpTxSubflow (uint8_t id, Ptr<TdTcpSocketBase> tdtcp)
   m_meta = tdtcp;
   m_subflowid = id;
   m_txBuffer = CreateObject<TcpTxBuffer> ();
-  m_tcb      = CreateObject<TcpSocketState> ();
-  m_tcb->m_currentPacingRate = m_tcb->m_maxPacingRate;
+  m_txBuffer->SetMaxBufferSize(m_meta->m_txBuffer->MaxBufferSize());
+  m_rtt      = m_meta->m_rtt->Copy ();
+  m_tcb      = CopyObject<TcpSocketState> (m_meta->m_tcb);
+  m_tcb->m_nextTxSequence = SequenceNumber32(0);
+  m_rto      = m_meta->m_rto.Get();
+  m_minRto   = m_meta->m_minRto;
+  m_clockGranularity = m_meta->m_clockGranularity;
+  // m_recoveryOps = 
+  // m_tcb->m_currentPacingRate = m_tcb->m_maxPacingRate;
   // m_pacingTimer.SetFunction (&TdTcpSocketBase::NotifyPacingPerformed, m_meta);
   if (m_meta->m_congestionControl)
   {
     m_congestionControl = m_meta->m_congestionControl->Fork ();
   }
+  else 
+  {
+    m_congestionControl = CreateObject<TcpNewReno>();
+  }
 
   if (m_meta->m_recoveryOps)
   {
     m_recoveryOps = m_meta->m_recoveryOps->Fork ();
+  }
+  else 
+  {
+    m_recoveryOps = CreateObject<TcpClassicRecovery>();
   }
 }
 
@@ -669,6 +684,10 @@ TdTcpTxSubflow::SendDataPacket (SequenceNumber32 seq,
   // AddOptions (header);
   m_meta->AddOptionTdTcpDSS(header, true, m_subflowid, m_meta->m_currTxSubflow, seq.GetValue(),
                                 false, 0, 0, 0);
+  if (m_meta->m_timestampEnabled)
+  {
+    m_meta->AddOptionTimestamp (header);
+  }
 
   if (m_meta->m_retxEvent.IsExpired ())
   {
@@ -716,10 +735,10 @@ TdTcpTxSubflow::SendDataPacket (SequenceNumber32 seq,
   }
 
   // Notify the application of the data being sent unless this is a retransmit
-  if (seq + sz > m_tcb->m_highTxMark)
+  if (dseq + sz > m_meta->m_tcb->m_highTxMark)
   {
     Simulator::ScheduleNow (&TdTcpSocketBase::NotifyDataSent, m_meta,
-                              (seq + sz - m_tcb->m_highTxMark.Get ()));
+                              (dseq + sz - m_meta->m_tcb->m_highTxMark.Get ()));
   }
   // Update highTxMark
   m_tcb->m_highTxMark = std::max (seq + sz, m_tcb->m_highTxMark.Get ());
@@ -800,10 +819,12 @@ TdTcpTxSubflow::AddLooseMapping(SequenceNumber32 dsnHead, uint16_t length)
   NS_LOG_LOGIC("Adding mapping with dsn=" << dsnHead << " len=" << length);
   TdTcpMapping mapping;
 
+  // outssn = FirstUnmappedSSN();
   mapping.MapToSSN(FirstUnmappedSSN());
   mapping.SetMappingSize(length);
   mapping.SetHeadDSN(dsnHead);
-  bool ok = m_TxMappings.AddMapping( mapping  );
+  bool ok = m_TxMappings.AddMapping(mapping);
+
   NS_ASSERT_MSG( ok, "Can't add mapping: 2 mappings overlap");
   return ok;
 }
@@ -819,7 +840,7 @@ TdTcpTxSubflow::FirstUnmappedSSN()
   }
   else 
   {
-    NS_FATAL_ERROR ("Bad");
+    // NS_FATAL_ERROR ("Bad");
   }
   return ssn;
 }

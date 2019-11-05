@@ -24,6 +24,8 @@
 #include "tcp-option-ts.h"
 #include "tcp-option-sack-permitted.h"
 #include "tcp-option-sack.h"
+//#include "tcp-option-tdtcp.h"
+
 
 #include "ns3/type-id.h"
 #include "ns3/log.h"
@@ -80,6 +82,7 @@ TcpOption::CreateOption (uint8_t kind)
     { TcpOption::WINSCALE,      TcpOptionWinScale::GetTypeId () },
     { TcpOption::SACKPERMITTED, TcpOptionSackPermitted::GetTypeId () },
     { TcpOption::SACK,          TcpOptionSack::GetTypeId () },
+    //{ TcpOption::TDTCP,          TcpOptionTdTcp::GetTypeId () },
     { TcpOption::UNKNOWN,  TcpOptionUnknown::GetTypeId () }
   };
 
@@ -108,6 +111,7 @@ TcpOption::IsKindKnown (uint8_t kind)
     case SACK:
     case TS:
     case MPTCP:
+    case TDTCP:
     // Do not add UNKNOWN here
       return true;
     }
@@ -165,7 +169,7 @@ TcpOptionUnknown::Serialize (Buffer::Iterator i) const
       NS_LOG_WARN ("Can't Serialize an Unknown Tcp Option");
       return;
     }
-
+  NS_LOG_WARN ("Serializing an Unknown Tcp Option");
   i.WriteU8 (GetKind ());
   i.WriteU8 (static_cast<uint8_t> (GetSerializedSize ()));
   i.Write (m_content, m_size - 2);

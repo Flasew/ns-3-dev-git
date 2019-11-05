@@ -91,6 +91,8 @@ public:
    * \return list of pointers to accepted sockets
    */
   std::list<Ptr<Socket> > GetAcceptedSockets (void) const;
+
+  void SetUp (Ptr<Socket> s, Address address, bool bound);
  
 protected:
   virtual void DoDispose (void);
@@ -129,6 +131,8 @@ private:
   Address         m_local;        //!< Local address to bind to
   uint64_t        m_totalRx;      //!< Total bytes received
   TypeId          m_tid;          //!< Protocol TypeId
+
+  bool            m_bound {false};
 
   /// Traced Callback: received packets, source address.
   TracedCallback<Ptr<const Packet>, const Address &> m_rxTrace;

@@ -91,6 +91,21 @@ PacketSink::GetListeningSocket (void) const
   return m_socket;
 }
 
+void 
+PacketSink::SetUp (Ptr<Socket> s, Address address, bool bound) 
+{
+  if (!m_socket)
+    {
+      m_socket = s;
+      m_local  = address;
+      m_bound = bound;
+    }
+  else 
+    {
+      NS_FATAL_ERROR ("Attempting to setup a set socket.");
+    }
+}
+
 std::list<Ptr<Socket> >
 PacketSink::GetAcceptedSockets (void) const
 {
@@ -117,24 +132,29 @@ void PacketSink::StartApplication ()    // Called at time specified by Start
   if (!m_socket)
     {
       m_socket = Socket::CreateSocket (GetNode (), m_tid);
+    }
+  if (!m_bound)
+    {
       if (m_socket->Bind (m_local) == -1)
         {
           NS_FATAL_ERROR ("Failed to bind socket");
         }
-      m_socket->Listen ();
-      m_socket->ShutdownSend ();
-      if (addressUtils::IsMulticast (m_local))
+      m_bound = true;
+    }
+
+  m_socket->Listen ();
+  m_socket->ShutdownSend ();
+  if (addressUtils::IsMulticast (m_local))
+    {
+      Ptr<UdpSocket> udpSocket = DynamicCast<UdpSocket> (m_socket);
+      if (udpSocket)
         {
-          Ptr<UdpSocket> udpSocket = DynamicCast<UdpSocket> (m_socket);
-          if (udpSocket)
-            {
-              // equivalent to setsockopt (MCAST_JOIN_GROUP)
-              udpSocket->MulticastJoinGroup (0, m_local);
-            }
-          else
-            {
-              NS_FATAL_ERROR ("Error: joining multicast on a non-UDP socket");
-            }
+          // equivalent to setsockopt (MCAST_JOIN_GROUP)
+          udpSocket->MulticastJoinGroup (0, m_local);
+        }
+      else
+        {
+          NS_FATAL_ERROR ("Error: joining multicast on a non-UDP socket");
         }
     }
 

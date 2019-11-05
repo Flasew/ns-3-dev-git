@@ -115,6 +115,7 @@ TdTcpSocketBase::TdTcpSocketBase(const TdTcpSocketBase& sock)
     m_txsubflows(sock.m_txsubflows),
     m_rxsubflows(sock.m_rxsubflows),
     m_currTxSubflow(0),
+    m_tdNSubflows(sock.m_tdNSubflows),
     m_connDupAckTh(sock.m_connDupAckTh),
     m_seqToSubflowMap(sock.m_seqToSubflowMap)
 {
@@ -140,13 +141,13 @@ TdTcpSocketBase::Fork (void)
 
 // Whether something is in range of the rx buffer should be left
 // for the rx_subflows to decide... 
-bool
-TdTcpSocketBase::OutOfRange (SequenceNumber32 head, SequenceNumber32 tail) const
-{
+// bool
+// TdTcpSocketBase::OutOfRange (SequenceNumber32 head, SequenceNumber32 tail) const
+// {
 
-  NS_LOG_DEBUG ("OutOfRange shouldn't be called for TdTcp");
-  return false;
-}
+//   NS_LOG_DEBUG ("OutOfRange shouldn't be called for TdTcp");
+//   return false;
+// }
 
 
 // These will become important in the future for indicating network change
@@ -172,32 +173,6 @@ TdTcpSocketBase::ForwardIcmp6 (Ipv6Address icmpSource, uint8_t icmpTtl,
                    static_cast<uint32_t> (icmpCode) << icmpInfo);
   TcpSocketBase::ForwardIcmp6(icmpSource, icmpTtl, icmpType, icmpCode, icmpInfo);
 }
-
-// int
-// TdTcpSocketBase::ProcessOptionTdTcp (const Ptr<const TcpOption> option)
-// {
-//   //! adds the header
-//   NS_LOG_FUNCTION(option);
-//   Ptr<const TcpOptionTdTcpMain> main = DynamicCast<const TcpOptionTdTcpMain>(option);
-//   switch(main->GetSubType())
-//      {
-//        case TcpOptionTdTcpMain::TD_CAPABLE:
-//             return ProcessOptionTdTcpCapable(main);
-//        case TcpOptionTdTcpMain::TD_DSS:
-//             {
-//               Ptr<const TcpOptionTdTcpDSS> dss = DynamicCast<const TcpOptionTdTcpDSS>(option);
-//               NS_ASSERT(dss);
-//               // Update later on
-//               ProcessOptionTdTcpDSSEstablished(dss);
-//             }
-//             break;
-//        case TcpOptionMpTcpMain::TD_CLOSE:
-//        default:
-//             NS_FATAL_ERROR("Unsupported yet");
-//             break;
-//       };
-//   return 2;
-// }
 
 void 
 TdTcpSocketBase::CompleteFork (Ptr<Packet> packet, const TcpHeader& tcpHeader,
@@ -250,7 +225,7 @@ TdTcpSocketBase::CompleteFork (Ptr<Packet> packet, const TcpHeader& tcpHeader,
 void 
 TdTcpSocketBase::SendSYN (bool withAck)
 {
-  NS_LOG_FUNCTION(this);
+  NS_LOG_FUNCTION(this << withAck);
 
   if (m_endPoint == nullptr && m_endPoint6 == nullptr)
   {
@@ -289,6 +264,11 @@ TdTcpSocketBase::SendSYN (bool withAck)
     AddOptionWScale (header);
   }
 
+  if (m_timestampEnabled)
+  {
+    AddOptionTimestamp (header);
+  }
+
   // SACK is not allowed for now.
   // if (m_sackEnabled)
   // {
@@ -324,6 +304,7 @@ TdTcpSocketBase::SendSYN (bool withAck)
     m_tcp->SendPacket (p, header, m_endPoint6->GetLocalAddress (),
                        m_endPoint6->GetPeerAddress (), m_boundnetdevice);
   }
+  NS_LOG_LOGIC ("TDTCP with header " << header << "Sent");
 
   if (m_retxEvent.IsExpired ())
   { // Retransmit SYN / SYN+ACK / FIN / FIN+ACK to guard against lost
@@ -359,6 +340,7 @@ TdTcpSocketBase::DoConnect (void)
 uint8_t 
 TdTcpSocketBase::ProcessOptionTdTcpCapable (const Ptr<const TcpOption> & opt) {
   
+  NS_LOG_FUNCTION (this << opt);
   if (!opt)
   {
     NS_LOG_WARN ("ProcessOption TDSYN received null pointer");
@@ -379,11 +361,11 @@ void
 TdTcpSocketBase:: AddOptionTdTcpCapable(TcpHeader &header, uint8_t n) 
 { 
   NS_LOG_FUNCTION(this << header << n);
-  NS_ASSERT (header.GetFlags () & TcpHeader::SYN);
+  // NS_ASSERT (header.GetFlags () & TcpHeader::SYN);
 
   Ptr<TcpOptionTdTcpCapable> option = CreateObject<TcpOptionTdTcpCapable>();
   option->SetNSubflows(n);
-  header.AppendOption(option);
+  NS_ASSERT(header.AppendOption(option));
 
   NS_LOG_INFO (m_node->GetId() << " set a TDCapable with nsubflows=" << (int)n);
 
@@ -417,6 +399,11 @@ TdTcpSocketBase:: AddOptionTdTcpDSS(TcpHeader &header,
   }
 
   header.AppendOption(option);
+
+  NS_LOG_INFO (m_node->GetId() << " set a TDCapable with data: " << data 
+                << "; ssid: " << ssid << "; csid: " << csid << "; sseq: "
+                << sseq << "; ack: " << ack << ";said: " << said 
+                << "; caid: " << caid << "; sack: " << sack);
 }
 
 void 
@@ -687,15 +674,17 @@ TdTcpSocketBase::ProcessOptionTdTcpDSS (const Ptr<const TcpOption> & option,
     return false;
   }
 
-  if (!dss->GetData(ssid, scid, sseq)) 
+  if (dss->HasData()) 
   {
-    ssid = -1;
-    scid = -1;
+    ssid = dss->GetDataSubflow();
+    scid = dss->GetDataCarrier();
+    sseq = dss->GetDataSeq();
   }
-  if (!dss->GetAck(asid, acid, sack))
+  if (dss->HasAck()) 
   {
-    asid = -1;
-    acid = -1;
+    asid = dss->GetAckSubflow();
+    acid = dss->GetAckCarrier();
+    sack = dss->GetAckNum();
   }
   if (ssid == -1 && asid == -1) 
   {
@@ -958,6 +947,7 @@ TdTcpSocketBase::SendPendingData (bool withAck)
 
   uint32_t nPacketsSent = 0;
   uint32_t availableWindow = subflow->AvailableWindow ();
+  NS_LOG_INFO ("Subflow " << m_currTxSubflow << " availableWindow " << availableWindow);
 
   // RFC 6675, Section (C)
   // If cwnd - pipe >= 1 SMSS, the sender SHOULD transmit one or more
@@ -1024,6 +1014,12 @@ TdTcpSocketBase::SendPendingData (bool withAck)
                       ". Wait to send.");
         break;
       }
+
+      if (subflow->m_tcb->m_nextTxSequence != subflow->FirstUnmappedSSN())
+      {
+        NS_LOG_DEBUG ("Current active subflow has retransmit, delaying new data");
+        break;
+      }
      
       uint32_t s = std::min (availableWindow, subflow->m_tcb->m_segmentSize);
 
@@ -1040,9 +1036,9 @@ TdTcpSocketBase::SendPendingData (bool withAck)
       //       previously unsent data.
       //
       // These steps are done in m_txBuffer with the tags.
-      if (subflow->m_tcb->m_nextTxSequence != next)
+      if (m_tcb->m_nextTxSequence != next)
       {
-        subflow->m_tcb->m_nextTxSequence = next;
+        m_tcb->m_nextTxSequence = next;
       }
       if (subflow->m_tcb->m_bytesInFlight.Get () == 0)
       {
@@ -1051,6 +1047,7 @@ TdTcpSocketBase::SendPendingData (bool withAck)
 
       
       // For now we limit the mapping to a per packet basis
+      // SequenceNumber32 outssn;
       bool ok = subflow->AddLooseMapping(dsnHead, length);
       NS_ASSERT(ok);
 
@@ -1067,12 +1064,12 @@ TdTcpSocketBase::SendPendingData (bool withAck)
 
       m_seqToSubflowMap[dsnHead] = subflow;
       
-      uint32_t sz = subflow->SendDataPacket (subflow->m_tcb->m_nextTxSequence, s, withAck);
+      uint32_t sz = subflow->SendDataPacket (subflow->m_tcb->m_nextTxSequence, length, withAck);
 
       // For TDTCP we need to make the strong guarantee that the subflow cannot
       // have any pending data, otherwise on a subflow switch these data will 
       // be blocked...
-      NS_ASSERT(sz == s);
+      NS_ASSERT(sz == length);
 
       subflow->m_tcb->m_nextTxSequence += sz;
 
@@ -1174,8 +1171,14 @@ TdTcpSocketBase::SendAckPacket (uint8_t subflowid, uint8_t scid, uint32_t sack)
 
   AddOptionTdTcpDSS(header, false, 0, 0, 0, true, subflowid, scid, sack);
 
+  if (m_timestampEnabled)
+  {
+    AddOptionTimestamp (header);
+  }
+
   uint16_t windowSize = AdvertisedWindowSize (false);
   header.SetWindowSize(windowSize);
+
 
   m_txTrace (p, header, this);
 
@@ -1315,8 +1318,24 @@ void
 TdTcpSocketBase::ChangeActivateSubflow(uint8_t newsid) 
 {
   NS_LOG_FUNCTION (this << newsid);
-  NS_ASSERT (newsid < m_txsubflows.size());
-  m_currTxSubflow = newsid;
+  
+  
+  // if (m_state == TcpSocket::ESTABLISHED) {
+    NS_ASSERT (newsid < m_tdNSubflows);
+    m_currTxSubflow = newsid;
+    NS_LOG_LOGIC ("Changed current subflow to " << newsid);
+
+    // if (!m_sendPendingDataEvent.IsRunning ())
+    // {
+      m_sendPendingDataEvent = Simulator::ScheduleNow (&TdTcpSocketBase::SendPendingData,
+                                                    this, m_connected);
+    // }
+  // }
+
+  // else  
+  // {
+  //   NS_LOG_LOGIC ("Connection not established, change network ignored");
+  // }
   // Dupack can be made adaptive here. No for now... 
   // Will be enough debug work. 
 }

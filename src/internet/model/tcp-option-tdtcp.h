@@ -197,10 +197,14 @@ public:
   virtual void SetAck (const uint8_t& subflowId, const uint32_t & ack);
   virtual void SetDataCarrier (const uint8_t& carrier);
   virtual void SetAckCarrier (const uint8_t& carrier);
-  virtual bool GetData (uint8_t&& subflowId, uint8_t && carrierId, uint32_t & seq) const;
-  virtual bool GetAck (uint8_t&& subflowId, uint8_t && carrierId, uint32_t & ack) const;
-  virtual bool GetDataCarrier (uint8_t& carrier) const;
-  virtual bool GetAckCarrier (uint8_t& carrier) const;
+  virtual uint8_t GetDataSubflow () const;
+  virtual uint8_t GetAckSubflow () const;
+  virtual uint32_t GetDataSeq () const;
+  virtual uint32_t GetAckNum () const;
+  virtual uint8_t GetDataCarrier() const;
+  virtual uint8_t GetAckCarrier() const;
+  virtual bool HasData () const;
+  virtual bool HasAck () const;
 
   //! Inherited
   virtual void Print (std::ostream &os) const;

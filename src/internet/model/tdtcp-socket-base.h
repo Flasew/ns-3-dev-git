@@ -165,7 +165,7 @@ protected:
    * \param tail end of the Sequence window
    * \returns true if it is in range
    */
-  virtual bool OutOfRange (SequenceNumber32 head, SequenceNumber32 tail) const;
+  // virtual bool OutOfRange (SequenceNumber32 head, SequenceNumber32 tail) const;
 
 
   // State transition functions
@@ -357,7 +357,7 @@ protected:
   void SendSYN(bool withAck = false);
   void SendHandShakeACK ();
   void SendAckPacket (uint8_t subflowid, uint8_t scid, uint32_t sack);
-
+public:
   // change active subflow
   void ChangeActivateSubflow(uint8_t newsid);
 
@@ -365,6 +365,8 @@ private:
   std::vector<Ptr<TdTcpTxSubflow>> m_txsubflows; // send packet and eats ack
   std::vector<Ptr<TdTcpRxSubflow>> m_rxsubflows; // eats data and send ack
   uint8_t m_currTxSubflow;
+
+  uint8_t m_tdNSubflows {2};
 
   uint32_t m_connDupAckTh {50};
   std::map<SequenceNumber32, Ptr<TdTcpTxSubflow>> m_seqToSubflowMap;
