@@ -311,17 +311,18 @@ void ParseBWP(std::string & p)
     // Config::SetDefault ("ns3::Ipv4GlobalRouting::RespondToInterfaceEvents", BooleanValue (true));
     // LogComponentEnable("TcpCongestionOps", LOG_LEVEL_INFO);
     LogComponentEnable("TdTcpSocketBase", LOG_ALL);
-    LogComponentEnable("TcpSocketBase", LOG_ALL);
+    // LogComponentEnable("TcpSocketBase", LOG_ALL);
     LogComponentEnable("TdTcpTxSubflow", LOG_ALL);
     LogComponentEnable("TdTcpRxSubflow", LOG_ALL);
-    LogComponentEnable("TdTcpMapping", LOG_ALL);
-    LogComponentEnable("TcpOptionTdTcp", LOG_ALL);
-    LogComponentEnable("TcpOption", LOG_ALL);
-    LogComponentEnable("TcpHeader", LOG_ALL);
-    LogComponentEnable("TcpTxBuffer", LOG_ALL);
-    LogComponentEnable("TCP_LARGE_TRANSFER", LOG_LEVEL_INFO);
+    // LogComponentEnable("TdTcpMapping", LOG_ALL);
+    // LogComponentEnable("TcpOptionTdTcp", LOG_ALL);
+    // LogComponentEnable("TcpOption", LOG_ALL);
+    // LogComponentEnable("TcpHeader", LOG_ALL);
+    // LogComponentEnable("TcpTxBuffer", LOG_ALL);
+    // LogComponentEnable("TCP_LARGE_TRANSFER", LOG_LEVEL_INFO);
     LogComponentEnable("PacketSink", LOG_ALL);
     LogComponentEnable("BulkSendApplication", LOG_ALL);
+    LogComponentEnable("TcpCongestionOps", LOG_ALL);
 
     CommandLine cmd;
     cmd.AddValue("BWP", "Bandwidth pattern", bwt_str);

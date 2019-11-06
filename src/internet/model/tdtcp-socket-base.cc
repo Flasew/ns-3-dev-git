@@ -139,17 +139,6 @@ TdTcpSocketBase::Fork (void)
   return CopyObject<TdTcpSocketBase> (this);
 }
 
-// Whether something is in range of the rx buffer should be left
-// for the rx_subflows to decide... 
-// bool
-// TdTcpSocketBase::OutOfRange (SequenceNumber32 head, SequenceNumber32 tail) const
-// {
-
-//   NS_LOG_DEBUG ("OutOfRange shouldn't be called for TdTcp");
-//   return false;
-// }
-
-
 // These will become important in the future for indicating network change
 // For now just leave as-is...
 void
@@ -959,7 +948,7 @@ TdTcpSocketBase::SendPendingData (bool withAck)
     if (m_tcb->m_pacing)
     {
       NS_LOG_INFO ("Pacing is enabled");
-      if (subflow->m_pacingTimer.IsRunning ())
+      if (m_pacingTimer.IsRunning ())
       {
         NS_LOG_INFO ("Skipping Packet due to pacing" << m_pacingTimer.GetDelayLeft ());
         break;
@@ -1099,17 +1088,17 @@ TdTcpSocketBase::SendPendingData (bool withAck)
                     " size " << sz);
       ++nPacketsSent;
 
-      if (subflow->m_tcb->m_pacing)
-      {
-        NS_LOG_INFO ("Pacing is enabled");
-        if (m_pacingTimer.IsExpired ())
-        {
-          NS_LOG_DEBUG ("Current Pacing Rate " << subflow->m_tcb->m_currentPacingRate);
-          NS_LOG_DEBUG ("Timer is in expired state, activate it " << subflow->m_tcb->m_currentPacingRate.CalculateBytesTxTime (sz));
-          m_pacingTimer.Schedule (subflow->m_tcb->m_currentPacingRate.CalculateBytesTxTime (sz));
-          break;
-        }
-      }
+    //   if (subflow->m_tcb->m_pacing)
+    //   {
+    //     NS_LOG_INFO ("Pacing is enabled");
+    //     if (m_pacingTimer.IsExpired ())
+    //     {
+    //       NS_LOG_DEBUG ("Current Pacing Rate " << subflow->m_tcb->m_currentPacingRate);
+    //       NS_LOG_DEBUG ("Timer is in expired state, activate it " << subflow->m_tcb->m_currentPacingRate.CalculateBytesTxTime (sz));
+    //       m_pacingTimer.Schedule (subflow->m_tcb->m_currentPacingRate.CalculateBytesTxTime (sz));
+    //       break;
+    //     }
+    //   }
     }
 
 
@@ -1321,15 +1310,14 @@ TdTcpSocketBase::ChangeActivateSubflow(uint8_t newsid)
   
   
   // if (m_state == TcpSocket::ESTABLISHED) {
-    NS_ASSERT (newsid < m_tdNSubflows);
-    m_currTxSubflow = newsid;
-    NS_LOG_LOGIC ("Changed current subflow to " << newsid);
+  NS_ASSERT (newsid < m_tdNSubflows);
+  m_currTxSubflow = newsid;
+  NS_LOG_LOGIC ("Changed current subflow to " << newsid);
 
-    // if (!m_sendPendingDataEvent.IsRunning ())
-    // {
-      m_sendPendingDataEvent = Simulator::ScheduleNow (&TdTcpSocketBase::SendPendingData,
-                                                    this, m_connected);
-    // }
+  // if (!m_sendPendingDataEvent.IsRunning ())
+  // {
+  m_sendPendingDataEvent = Simulator::ScheduleNow (&TdTcpSocketBase::SendPendingData,
+                                                this, m_connected);
   // }
 
   // else  

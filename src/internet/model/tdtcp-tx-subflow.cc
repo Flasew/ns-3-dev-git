@@ -36,6 +36,7 @@
 #include "ns3/tcp-congestion-ops.h"
 #include "ns3/tcp-recovery-ops.h"
 #include "ns3/tcp-socket.h"
+#include "ns3/tcp-option-ts.h"
 #include <algorithm>
 #include <cmath>
 #include <iostream>
@@ -124,6 +125,9 @@ TdTcpTxSubflow::ReceivedAck(uint8_t acid, Ptr<Packet> p, const TcpHeader& tcpHea
     m_highRxAckMark = SequenceNumber32(sack);
   }
 
+  if (m_meta->m_currTxSubflow == m_subflowid)
+    EstimateRtt(tcpHeader, ackNumber);
+
   // RFC 6675 Section 5: 2nd, 3rd paragraph and point (A), (B) implementation
   // are inside the function ProcessAck
   ProcessAck (ackNumber, oldHeadSequence);
@@ -185,6 +189,10 @@ TdTcpTxSubflow::ProcessAck (const SequenceNumber32 &ackNumber,
     // the congestion state machine
     DupAck ();
   }
+  // else
+  // {
+
+  // }
 
   if (ackNumber == oldHeadSequence
       && ackNumber == m_tcb->m_highTxMark)
@@ -588,6 +596,7 @@ TdTcpTxSubflow::NewAck (SequenceNumber32 const& ack, bool resetRTO)
     // On receiving a "New" ack we restart retransmission timer .. RFC 6298
     // RFC 6298, clause 2.4
     m_rto = Max (m_rtt->GetEstimate () + Max (m_clockGranularity, m_rtt->GetVariation () * 4), m_minRto);
+    NS_LOG_LOGIC (this << "Estimated RTT: " << (m_rtt->GetEstimate()).GetSeconds());
 
     NS_LOG_LOGIC (this << " Schedule ReTxTimeout at time " <<
                   Simulator::Now ().GetSeconds () << " to expire at time " <<
@@ -843,6 +852,55 @@ TdTcpTxSubflow::FirstUnmappedSSN()
     // NS_FATAL_ERROR ("Bad");
   }
   return ssn;
+}
+
+void
+TdTcpTxSubflow::EstimateRtt (const TcpHeader& tcpHeader, const SequenceNumber32 & ackNumber)
+{
+  SequenceNumber32 ackSeq = ackNumber;
+  Time m = Time (0.0);
+
+  // An ack has been received, calculate rtt and log this measurement
+  // Note we use a linear search (O(n)) for this since for the common
+  // case the ack'ed packet will be at the head of the list
+  if (!m_history.empty ())
+    {
+      RttHistory& h = m_history.front ();
+      if (!h.retx && ackSeq >= (h.seq + SequenceNumber32 (h.count)))
+        { // Ok to use this sample
+          if (m_meta->m_timestampEnabled && tcpHeader.HasOption (TcpOption::TS))
+            {
+              Ptr<const TcpOptionTS> ts;
+              ts = DynamicCast<const TcpOptionTS> (tcpHeader.GetOption (TcpOption::TS));
+              m = TcpOptionTS::ElapsedTimeFromTsValue (ts->GetEcho ());
+            }
+          else
+            {
+              m = Simulator::Now () - h.time; // Elapsed time
+            }
+        }
+    }
+
+  // Now delete all ack history with seq <= ack
+  while (!m_history.empty ())
+    {
+      RttHistory& h = m_history.front ();
+      if ((h.seq + SequenceNumber32 (h.count)) > ackSeq)
+        {
+          break;                                                              // Done removing
+        }
+      m_history.pop_front (); // Remove
+    }
+
+  if (!m.IsZero ())
+    {
+      m_rtt->Measurement (m);                // Log the measurement
+      // RFC 6298, clause 2.4
+      m_rto = Max (m_rtt->GetEstimate () + Max (m_clockGranularity, m_rtt->GetVariation () * 4), m_minRto);
+      m_tcb->m_lastRtt = m_rtt->GetEstimate ();
+      m_tcb->m_minRtt = std::min (m_tcb->m_lastRtt.Get (), m_tcb->m_minRtt);
+      NS_LOG_INFO (this << m_tcb->m_lastRtt << m_tcb->m_minRtt);
+    }
 }
 
 }

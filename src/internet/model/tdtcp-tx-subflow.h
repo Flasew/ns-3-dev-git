@@ -80,6 +80,7 @@ public:
                                  bool isRetransmission);
   bool AddLooseMapping(SequenceNumber32 dsnHead, uint16_t length);
   SequenceNumber32 FirstUnmappedSSN();
+  void EstimateRtt (const TcpHeader& tcpHeader, const SequenceNumber32 & ackNumber);
 
 private:
 
