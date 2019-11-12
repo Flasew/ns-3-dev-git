@@ -439,6 +439,9 @@ TdTcpSocketBase::ProcessSynSent (Ptr<Packet> packet, const TcpHeader& tcpHeader)
       auto maxpacer = m_maxPacingRates.find(i);
       if (maxpacer != m_maxPacingRates.end())
         m_txsubflows[i]->m_tcb->m_maxPacingRate = maxpacer->second;
+      auto paceratio = m_pacingRatios.find(i);
+      if (paceratio != m_pacingRatios.end())
+        m_txsubflows[i]->m_pacingRatio = paceratio->second;
     }
 
     NS_LOG_DEBUG ("SYN_SENT -> ESTABLISHED");
@@ -843,20 +846,21 @@ TdTcpSocketBase::ReceivedAck (Ptr<Packet> packet, const TcpHeader& tcpHeader)
     }
     // otherwise, the ACK is precisely equal to the nextTxSequence
     NS_ASSERT(dack <= m_tcb->m_nextTxSequence);
-    // if (m_dupAckCount > m_connDupAckTh) 
-    // {
-    //   Ptr<TdTcpTxSubflow> tx;
-    //   if ((tx = m_seqToSubflowMap[dack]))
-    //   {
-    //     tx->m_lastXRetransmit = std::make_pair(0, SequenceNumber32(0));
-    //     NS_LOG_INFO ("Connection level retransmit");
-    //     tx->DoRetransmit();
-    //   }
-    //   else 
-    //   {
-    //     NS_FATAL_ERROR ("Cannot find subflow who sent a packet in data dupack event");
-    //   }
-    // }
+    if (m_dupAckCount > m_connDupAckTh) 
+    {
+      Ptr<TdTcpTxSubflow> tx;
+      if ((tx = m_seqToSubflowMap[dack]))
+      {
+        tx->m_lastXRetransmit = std::make_pair(0, SequenceNumber32(0));
+        NS_LOG_INFO ("Connection level retransmit");
+        tx->DoRetransmit();
+        m_dupAckCount = 0;
+      }
+      else 
+      {
+        NS_FATAL_ERROR ("Cannot find subflow who sent a packet in data dupack event");
+      }
+    }
 
   }
   else if (dack > m_txBuffer->HeadSequence ())
@@ -957,9 +961,15 @@ TdTcpSocketBase::SendPendingData (bool withAck)
     // || subflow->m_tcb->m_cWnd < subflow->m_tcb->m_ssThresh)
   {
     NS_LOG_LOGIC("Disabling pacing due to small window");
+    // if (subflow->m_paced = true)
+    // {
+    //   subflow->m_tcb->m_cWnd = subflow->m_lastCwnd;
+    //   NS_LOG_LOGIC ("Rewinding cWnd to " << subflow->m_lastCwnd);
+    // }
     subflow->m_paced = false;
     m_pacingTimer.Cancel();
   }
+
   // subflow->UpdateAdaptivePacingRate();
 
   // RFC 6675, Section (C)
@@ -1342,16 +1352,20 @@ TdTcpSocketBase::ChangeActivateSubflow(uint8_t newsid)
   uint8_t oldsid = m_currTxSubflow;
   if (oldsid < m_txsubflows.size())
   {
-    m_txsubflows[oldsid]->m_disableingTime = Simulator::Now();
+    // m_txsubflows[oldsid]->m_disableingTime = Simulator::Now();
+    // m_txsubflows[oldsid]->m_tcb->m_cWnd /= m_txsubflows[oldsid]->m_pacingRatio;
+    NS_LOG_INFO ("Deflate subflow " << (int)oldsid << " cwnd back to " << m_txsubflows[oldsid]->m_tcb->m_cWnd.Get());
     // m_txsubflows[m_currTxSubflow]->UpdateAdaptivePacingRate();
   }
 
   m_currTxSubflow = newsid;
   if (m_currTxSubflow < m_txsubflows.size()) 
   {
+    // m_txsubflows[m_currTxSubflow]->m_tcb->m_cWnd *= m_txsubflows[newsid]->m_pacingRatio;
+    // NS_LOG_INFO ("inflate subflow " << (int)newsid << " cwnd back to " << m_txsubflows[newsid]->m_tcb->m_cWnd.Get());
     m_txsubflows[m_currTxSubflow]->UpdateAdaptivePacingRate(oldsid);
   }
-  NS_LOG_LOGIC ("Changed current subflow to " << newsid);
+  NS_LOG_LOGIC ("Changed current subflow to " << (int)newsid);
 
   // if (newsid < m_txsubflows.size())
 
@@ -1384,6 +1398,14 @@ TdTcpSocketBase::SetMaxPacingRate (uint8_t subflowid, DataRate rate)
   m_maxPacingRates[subflowid] = rate;
   if (m_txsubflows.size() > subflowid)
     m_txsubflows[subflowid]->m_tcb->m_maxPacingRate = rate;
+}
+
+void 
+TdTcpSocketBase::SetPacingRatio (uint8_t subflowid, int ratio)
+{
+  m_pacingRatios[subflowid] = ratio;
+  if (m_txsubflows.size() > subflowid)
+    m_txsubflows[subflowid]->m_pacingRatio = ratio;
 }
 
 // void

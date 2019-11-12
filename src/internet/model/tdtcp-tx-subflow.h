@@ -102,6 +102,7 @@ private:
 
   bool              m_paced   {false};
   uint64_t          m_maxPacedRate {0};
+  int               m_pacingRatio {1};
 
   uint64_t          m_transmitForOther {0};
   // std::map<uint64_t, uint64_t> m_xtransmitcnt {};
@@ -131,7 +132,9 @@ private:
 
   TdTcpMappingContainer m_TxMappings;  //!< List of mappings to send
 
-  // uint32_t m_lastCwnd {0};
+  uint32_t m_lastCwnd {0};
+  // uint32_t m_inflatedWin {0};
+  // bool     m_useInflated {false};
 };
 
 

@@ -496,6 +496,8 @@ void ParseBWP(std::string & p)
     sb->SetRetxThresh(dupackth);
     sb->SetMaxPacingRate(0, DataRate("10Gbps"));
     sb->SetMaxPacingRate(1, DataRate("1Gbps"));
+    sb->SetPacingRatio(0, 10);
+    sb->SetPacingRatio(1, 1);
 
     sockets.push_back(sb);
 
@@ -561,6 +563,8 @@ void ParseBWP(std::string & p)
   // sb->SetRecoveryAlgorithm(rec);
   sb->SetMaxPacingRate(0, DataRate("10Gbps"));
   sb->SetMaxPacingRate(1, DataRate("1Gbps"));
+  sb->SetPacingRatio(0, 10);
+  sb->SetPacingRatio(1, 1);
   Ptr<PacketSink> app = CreateObject<PacketSink> ();
   std::cout << "sink bind: " << ns3TcpSocket->Bind(InetSocketAddress(portInit)) << std::endl;
   app->SetUp(ns3TcpSocket, Ipv4Address::GetAny(), true);

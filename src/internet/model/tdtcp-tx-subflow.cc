@@ -958,8 +958,8 @@ TdTcpTxSubflow::UpdateAdaptivePacingRate(uint8_t fromsid)
   // + m_transmitForOther;
 
   Time otherRTT = m_meta->m_txsubflows[fromsid]->m_tcb->m_lastRtt.Get();
-  Time proposeSpread = m_lastAckDTime - m_disableingTime - otherRTT/2 + m_tcb->m_lastRtt.Get()/2;
-  // Time proposeSpread = m_tcb->m_lastRtt.Get()/2;
+  // Time proposeSpread = m_lastAckDTime - m_disableingTime - otherRTT/2 + m_tcb->m_lastRtt.Get()/2;
+  Time proposeSpread = m_tcb->m_lastRtt.Get();
 
   NS_LOG_INFO ("Proposed spreading cwnd " << win << " across " << 
                 proposeSpread.GetSeconds() << "seconds; CurrRTT is " <<
