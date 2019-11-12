@@ -108,22 +108,22 @@ public:
   }
 };
 
-/**
+/*
  * \brief TD_CAPABLE used for connection handshake.
  * Unlike MPTCP which shakes for each subflow, TDTCP only shakes hands once
  * to establish the connection for all subflows. After all the concept of 
  * "subflow" is pretty abstract...
  *
- * HOST A                                              HOST B
- * ------                                              ------
- * SYN, TD_CAPABLE              ->                           
- * [A's # of (sender)subflows]                               
- *                              <-        SYN|ACK, TD_CAPABLE
- *                                        [B's # of subflows]
- * ACK, TD_CAPABLE              ->                           
- *
- * Header is fixed length (32 bits)
- *   0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+ * HOST A                                                      HOST B
+ * ------                                                      ------
+ * SYN, TD_CAPABLE                   ->                              
+ * [A's # of (sender) subflows]                                      
+ *                                   <-           SYN|ACK, TD_CAPABLE
+ *                                       [B's # of (sender) subflows]
+ * ACK, TD_CAPABLE                   ->                              
+ *                                                                   
+ * Header is fixed length (32 bits)                                  
+ *   0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 
  *  +---------------+---------------+-------+-------+---------------+
  *  |     Kind      |    Length=4   |SubType|       |  # subflows   |
  *  +---------------+---------------+-------+-------+---------------+
@@ -162,7 +162,7 @@ private:
  * Contains SEQ/ACK information of subflows. A data packet must contain at least
  * one of SEQ and ACK information.
  *
- * Header is variable length
+ * Header 
  *   0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
  *  +---------------+---------------+-------+-------+---------------+
  *  |     Kind      |   Length=16   |SubType| |F|D|A|               |

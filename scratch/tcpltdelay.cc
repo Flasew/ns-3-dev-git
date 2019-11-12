@@ -323,6 +323,7 @@ void ParseBWP(std::string & p)
     LogComponentEnable("PacketSink", LOG_ALL);
     LogComponentEnable("BulkSendApplication", LOG_ALL);
     LogComponentEnable("TcpCongestionOps", LOG_ALL);
+    LogComponentEnable("TcpBic", LOG_ALL);
 
     CommandLine cmd;
     cmd.AddValue("BWP", "Bandwidth pattern", bwt_str);
@@ -410,6 +411,7 @@ void ParseBWP(std::string & p)
 
   Config::SetDefault ("ns3::TcpSocketState::MaxPacingRate", StringValue ("10Gbps"));
   Config::SetDefault ("ns3::TcpSocketState::EnablePacing", BooleanValue (true));
+  // Config::SetDefault ("ns3::TcpSocketState::EnablePacing", BooleanValue (true));
 
   sockets = std::vector<Ptr<TdTcpSocketBase>>();
   //Packet::EnablePrinting();
@@ -462,7 +464,8 @@ void ParseBWP(std::string & p)
 
   Config::SetDefault("ns3::TcpSocket::SegmentSize", UintegerValue (1424));
   Config::SetDefault ("ns3::TcpSocketBase::Sack", BooleanValue (false));
-  Config::SetDefault ("ns3::TcpSocketBase::Timestamp", BooleanValue (true));
+  Config::SetDefault ("ns3::TcpSocketBase::Timestamp", BooleanValue (false));
+  Config::SetDefault ("ns3::TcpL4Protocol::SocketType", StringValue ("ns3::TcpNewReno"));
 
   Config::SetDefault("ns3::TcpSocket::SndBufSize", UintegerValue (rwnd));
   Config::SetDefault("ns3::TcpSocket::RcvBufSize", UintegerValue (rwnd));
@@ -484,13 +487,15 @@ void ParseBWP(std::string & p)
 
     //Ptr<TdTcpSocketBase> ns3TcpSocket = CreateObject<TdTcpSocketBase>(TopoHelper::allNodes.Get(1));
     //Ptr<Socket> ns3TcpSocket = Socket::CreateSocket (TopoHelper::allNodes.Get(0), TcpSocketFactory::GetTypeId());
-    //Ptr<TcpRecoveryOps> rec = CreateObject<TcpPrrRecovery>();
     //Ptr<TcpSocketBase> sb = DynamicCast<TcpSocketBase>(ns3TcpSocket);
-    //sb->SetRecoveryAlgorithm(rec);
     Ptr<TcpL4Protocol> tcp = TopoHelper::allNodes.Get(0)->GetObject<TcpL4Protocol>();
     Ptr<Socket> ns3TcpSocket = tcp->CreateSocket (TcpNewReno::GetTypeId(), TdTcpSocketBase::GetTypeId(), true);
     Ptr<TdTcpSocketBase> sb = DynamicCast<TdTcpSocketBase>(ns3TcpSocket);
+    // Ptr<TcpRecoveryOps> rec = CreateObject<TcpPrrRecovery>();
+    // sb->SetRecoveryAlgorithm(rec);
     sb->SetRetxThresh(dupackth);
+    sb->SetMaxPacingRate(0, DataRate("10Gbps"));
+    sb->SetMaxPacingRate(1, DataRate("1Gbps"));
 
     sockets.push_back(sb);
 
@@ -552,6 +557,10 @@ void ParseBWP(std::string & p)
   Ptr<TcpL4Protocol> tcp = TopoHelper::allNodes.Get(1)->GetObject<TcpL4Protocol>();
   Ptr<Socket> ns3TcpSocket = tcp->CreateSocket (TcpNewReno::GetTypeId(), TdTcpSocketBase::GetTypeId(), true);
   Ptr<TdTcpSocketBase> sb = DynamicCast<TdTcpSocketBase>(ns3TcpSocket);
+  // Ptr<TcpRecoveryOps> rec = CreateObject<TcpPrrRecovery>();
+  // sb->SetRecoveryAlgorithm(rec);
+  sb->SetMaxPacingRate(0, DataRate("10Gbps"));
+  sb->SetMaxPacingRate(1, DataRate("1Gbps"));
   Ptr<PacketSink> app = CreateObject<PacketSink> ();
   std::cout << "sink bind: " << ns3TcpSocket->Bind(InetSocketAddress(portInit)) << std::endl;
   app->SetUp(ns3TcpSocket, Ipv4Address::GetAny(), true);

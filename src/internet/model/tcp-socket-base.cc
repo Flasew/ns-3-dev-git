@@ -1011,9 +1011,10 @@ TcpSocketBase::DoConnect (void)
   NS_LOG_FUNCTION (this);
   if (m_tdtcpEnabled) 
   {
-    auto td = this->UpgradeToTd();
-    Simulator::ScheduleNow(&TdTcpSocketBase::DoConnect, td);
-    return 0;
+    NS_FATAL_ERROR ("Directly use a TD socket for now.");
+    // auto td = this->UpgradeToTd();
+    // Simulator::ScheduleNow(&TdTcpSocketBase::DoConnect, td);
+    // return 0;
   }
 
   // A new connection is allowed only if this socket does not have a connection
@@ -2218,41 +2219,41 @@ TcpSocketBase::ProcessTcpOptions(const TcpHeader& header)
   return 0;
 }
 
-Ptr<TdTcpSocketBase>
-TcpSocketBase::UpgradeToTd()
-{
-  NS_LOG_FUNCTION("Upgrading to td " << this);
+// Ptr<TdTcpSocketBase>
+// TcpSocketBase::UpgradeToTd()
+// {
+//   NS_LOG_FUNCTION("Upgrading to td " << this);
 
-  // set callbacks
-  Callback<void, Ptr<Socket>, uint32_t > cbSend = this->m_sendCb;
-  Callback<void, Ptr<Socket> >  cbRcv = this->m_receivedData;
-  Callback<void, Ptr<Socket>, uint32_t>  cbDataSent = this->m_dataSent;
-  Callback<void, Ptr<Socket> >  cbConnectFail = this->m_connectionFailed;
-  Callback<void, Ptr<Socket> >  cbConnectSuccess = this->m_connectionSucceeded;
-  Callback<bool, Ptr<Socket>, const Address &> connectionRequest = this->m_connectionRequest;
-  Callback<void, Ptr<Socket>, const Address&> newConnectionCreated = this->m_newConnectionCreated;
-  ////////////////////////
-  //// !! CAREFUL !!
-  //// all callbacks are disabled
-  // Otherwise timers
-  this->CancelAllTimers();
-  Ptr<TcpL4Protocol> tcp = this->m_tcp;
-  auto node = GetNode();
+//   // set callbacks
+//   Callback<void, Ptr<Socket>, uint32_t > cbSend = this->m_sendCb;
+//   Callback<void, Ptr<Socket> >  cbRcv = this->m_receivedData;
+//   Callback<void, Ptr<Socket>, uint32_t>  cbDataSent = this->m_dataSent;
+//   Callback<void, Ptr<Socket> >  cbConnectFail = this->m_connectionFailed;
+//   Callback<void, Ptr<Socket> >  cbConnectSuccess = this->m_connectionSucceeded;
+//   Callback<bool, Ptr<Socket>, const Address &> connectionRequest = this->m_connectionRequest;
+//   Callback<void, Ptr<Socket>, const Address&> newConnectionCreated = this->m_newConnectionCreated;
+//   ////////////////////////
+//   //// !! CAREFUL !!
+//   //// all callbacks are disabled
+//   // Otherwise timers
+//   this->CancelAllTimers();
+//   Ptr<TcpL4Protocol> tcp = this->m_tcp;
+//   auto node = GetNode();
 
-  auto temp = this->Fork();
+//   auto temp = this->Fork();
 
-  // I don't want the destructor to be called in that moment
-  TdTcpSocketBase* meta = new (this) TdTcpSocketBase(*temp);
-  meta->SetTcp(tcp);
-  meta->SetNode(node);
-  // we add it to tcp so that it can be freed and used for token lookup
-  meta->SetSendCallback(cbSend);
-  meta->SetConnectCallback (cbConnectSuccess, cbConnectFail);
-  meta->SetDataSentCallback (cbDataSent);
-  meta->SetRecvCallback (cbRcv);
-  meta->SetAcceptCallback(connectionRequest, newConnectionCreated);
-  return Ptr<TdTcpSocketBase>(meta);
-}
+//   // I don't want the destructor to be called in that moment
+//   TdTcpSocketBase* meta = new (this) TdTcpSocketBase(*temp);
+//   meta->SetTcp(tcp);
+//   meta->SetNode(node);
+//   // we add it to tcp so that it can be freed and used for token lookup
+//   meta->SetSendCallback(cbSend);
+//   meta->SetConnectCallback (cbConnectSuccess, cbConnectFail);
+//   meta->SetDataSentCallback (cbDataSent);
+//   meta->SetRecvCallback (cbRcv);
+//   meta->SetAcceptCallback(connectionRequest, newConnectionCreated);
+//   return Ptr<TdTcpSocketBase>(meta);
+// }
 
 /* Received a packet upon SYN_SENT */
 void
@@ -2313,9 +2314,10 @@ TcpSocketBase::ProcessSynSent (Ptr<Packet> packet, const TcpHeader& tcpHeader)
       }
       if(processResult == 2)
       {
-        Ptr<TdTcpSocketBase> tdsocket = UpgradeToTd();
-        Simulator::ScheduleNow( &TdTcpSocketBase::ProcessSynSent, tdsocket, packet, tcpHeader);
-        return;
+        NS_FATAL_ERROR ("Unsupported TDTCP connection.");
+        // Ptr<TdTcpSocketBase> tdsocket = UpgradeToTd();
+        // Simulator::ScheduleNow( &TdTcpSocketBase::ProcessSynSent, tdsocket, packet, tcpHeader);
+        // return;
       }
       NS_LOG_DEBUG ("SYN_SENT -> ESTABLISHED");
       m_congestionControl->CongestionStateSet (m_tcb, TcpSocketState::CA_OPEN);

@@ -81,6 +81,8 @@ public:
   bool AddLooseMapping(SequenceNumber32 dsnHead, uint16_t length);
   SequenceNumber32 FirstUnmappedSSN();
   void EstimateRtt (const TcpHeader& tcpHeader, const SequenceNumber32 & ackNumber);
+  void UpdateAdaptivePacingRate (uint8_t fromsid);
+  void UpdateAdaptivePacingRate();
 
 private:
 
@@ -94,6 +96,15 @@ private:
   Time              m_rto     {Seconds (0.0)}; //!< Retransmit timeout
   Time              m_minRto  {Time::Max ()};   //!< minimum value of the Retransmit timeout
   Time              m_clockGranularity {Seconds (0.001)}; //!< Clock Granularity used in RTO calcs
+
+  Time              m_disableingTime {Seconds (0.0)};
+  Time              m_lastAckDTime   {Seconds (0.0)};
+
+  bool              m_paced   {false};
+  uint64_t          m_maxPacedRate {0};
+
+  uint64_t          m_transmitForOther {0};
+  // std::map<uint64_t, uint64_t> m_xtransmitcnt {};
 
   Ptr<TcpTxBuffer> m_txBuffer; //!< Tx buffer
 
@@ -113,10 +124,14 @@ private:
   Ptr<TcpCongestionOps>  m_congestionControl; //!< Congestion control
   Ptr<TcpRecoveryOps>    m_recoveryOps;       //!< Recovery Algorithm
 
+  std::pair<uint8_t, SequenceNumber32> m_lastXRetransmit;
+
   // Pacing related variable
   Timer m_pacingTimer {Timer::REMOVE_ON_DESTROY}; //!< Pacing Event
 
   TdTcpMappingContainer m_TxMappings;  //!< List of mappings to send
+
+  // uint32_t m_lastCwnd {0};
 };
 
 

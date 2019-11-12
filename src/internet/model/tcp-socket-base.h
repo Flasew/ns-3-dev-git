@@ -1223,7 +1223,7 @@ protected:
 
   Ptr<TdTcpSocketBase> ForkTD();
   bool ProcessOptionTdTcp( const Ptr<const TcpOption> option);
-  Ptr<TdTcpSocketBase> UpgradeToTd();
+  // Ptr<TdTcpSocketBase> UpgradeToTd();
 
 protected:
   //mptcp classes declared as friends

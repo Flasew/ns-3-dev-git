@@ -112,10 +112,15 @@ TdTcpTxSubflow::ReceivedAck(uint8_t acid, Ptr<Packet> p, const TcpHeader& tcpHea
   SequenceNumber32 oldHeadSequence = m_txBuffer->HeadSequence ();
 
   // if cid is not the same as sid, return the size of the packet to CWND
-  uint32_t nbyteToDiscard = sack - oldHeadSequence;
+  // uint32_t nbyteToDiscard = sack - oldHeadSequence;
   if (acid != m_subflowid) 
   {
-    m_meta->m_txsubflows[acid]->m_tcb->m_cWnd += nbyteToDiscard;
+    Ptr<TdTcpTxSubflow> carrier = m_meta->m_txsubflows[acid];
+    carrier->m_tcb->m_cWnd += carrier->m_transmitForOther;
+    // carrier->UpdateAdaptivePacingRate(0);
+    carrier->m_transmitForOther = 0;
+    // m_meta->m_txsubflows[acid]->m_transmitForOther -= nbyteToDiscard;
+    // NS_LOG_INFO ("Subflow " << (int)acid << " acked, transmit for other=" << m_meta->m_txsubflows[acid]->m_transmitForOther);
   }
 
   m_txBuffer->DiscardUpTo (ackNumber);
@@ -126,7 +131,13 @@ TdTcpTxSubflow::ReceivedAck(uint8_t acid, Ptr<Packet> p, const TcpHeader& tcpHea
   }
 
   if (m_meta->m_currTxSubflow == m_subflowid)
+  {
     EstimateRtt(tcpHeader, ackNumber);
+  }
+  else 
+  {
+    m_lastAckDTime = Simulator::Now();
+  }
 
   // RFC 6675 Section 5: 2nd, 3rd paragraph and point (A), (B) implementation
   // are inside the function ProcessAck
@@ -572,6 +583,30 @@ TdTcpTxSubflow::DoRetransmit ()
   NS_ASSERT (seq == m_txBuffer->HeadSequence ());
 
   NS_LOG_INFO ("Retransmitting " << seq);
+
+
+  // if (m_meta->m_currTxSubflow != m_subflowid)
+  // {
+  //   Ptr<TdTcpTxSubflow> carrier = m_meta->m_txsubflows[m_meta->m_currTxSubflow];
+  //   auto transmitId = std::make_pair(m_subflowid, seq);
+
+  //   if (carrier->m_lastXRetransmit == transmitId)
+  //   {
+  //     NS_LOG_INFO ("Skipping cross-subflow re-retransmit packet");
+  //     return;
+  //   }
+
+  //   // carrier->m_lastXRetransmit = transmitId;
+  //   // uint32_t carrierCWND = carrier->m_tcb->m_cWnd;
+  //   // carrier->m_tcb->m_cWnd = std::max(carrierCWND - sz, 2*carrier->m_tcb->m_segmentSize);
+  //   // // carrier->m_transmitForOther += sz;
+  //   // // NS_LOG_INFO ("Subflow " << (int)m_meta->m_currTxSubflow << " carried other info, transmit for other=" << carrier->m_transmitForOther);
+  //   // isRetransmission = true;
+  // }
+
+    
+
+
   // Update the trace and retransmit the segment
   m_tcb->m_nextTxSequence = seq;
   uint32_t sz = 
@@ -596,7 +631,7 @@ TdTcpTxSubflow::NewAck (SequenceNumber32 const& ack, bool resetRTO)
     // On receiving a "New" ack we restart retransmission timer .. RFC 6298
     // RFC 6298, clause 2.4
     m_rto = Max (m_rtt->GetEstimate () + Max (m_clockGranularity, m_rtt->GetVariation () * 4), m_minRto);
-    NS_LOG_LOGIC (this << "Estimated RTT: " << (m_rtt->GetEstimate()).GetSeconds());
+    NS_LOG_LOGIC ("SubflowID" << m_subflowid << " last RTT: " << (m_tcb->m_lastRtt.Get()).GetSeconds());
 
     NS_LOG_LOGIC (this << " Schedule ReTxTimeout at time " <<
                   Simulator::Now ().GetSeconds () << " to expire at time " <<
@@ -673,6 +708,17 @@ TdTcpTxSubflow::SendDataPacket (SequenceNumber32 seq,
     NS_FATAL_ERROR("Could not translate mapping associated to ssn");
   }
 
+  if (m_meta->m_currTxSubflow != m_subflowid)
+  {
+    Ptr<TdTcpTxSubflow> carrier = m_meta->m_txsubflows[m_meta->m_currTxSubflow];
+
+    uint32_t carrierCWND = carrier->m_tcb->m_cWnd;
+    carrier->m_tcb->m_cWnd = std::max(carrierCWND - sz, 2*carrier->m_tcb->m_segmentSize);
+    // m_tcb->m_cWnd = std::max(m_tcb->m_cWnd.Get() - sz, 2*m_tcb->m_segmentSize);
+    carrier->m_transmitForOther += sz;
+    NS_LOG_INFO ("Subflow " << (int)m_meta->m_currTxSubflow << " carried other info, transmit for other=" << carrier->m_transmitForOther);
+    // isRetransmission = true;
+  }
   TcpHeader header;
   header.SetFlags (flags);
   header.SetSequenceNumber (dseq);
@@ -708,14 +754,6 @@ TdTcpTxSubflow::SendDataPacket (SequenceNumber32 seq,
     m_meta->m_retxEvent = Simulator::Schedule (m_rto, &TdTcpSocketBase::ReTxTimeout, m_meta);
   }
 
-  if (m_meta->m_currTxSubflow != m_subflowid)
-  {
-    Ptr<TdTcpTxSubflow> carrier = m_meta->m_txsubflows[m_meta->m_currTxSubflow];
-    uint32_t carrierCWND = carrier->m_tcb->m_cWnd;
-    carrier->m_tcb->m_cWnd = std::max(carrierCWND - sz, 2*carrier->m_tcb->m_segmentSize);
-    isRetransmission = true;
-  }
-
   m_meta->m_txTrace (p, header, m_meta);
 
   if (m_meta->m_endPoint)
@@ -736,6 +774,7 @@ TdTcpTxSubflow::SendDataPacket (SequenceNumber32 seq,
   }
 
   UpdateRttHistory (seq, sz, isRetransmission);
+  
 
   // Update bytes sent during recovery phase
   if (m_tcb->m_congState == TcpSocketState::CA_RECOVERY)
@@ -880,6 +919,8 @@ TdTcpTxSubflow::EstimateRtt (const TcpHeader& tcpHeader, const SequenceNumber32 
             }
         }
     }
+  NS_LOG_LOGIC ("Subflow " << (int)m_subflowid 
+    << " measured RTT of ack=" << ackNumber.GetValue() << ": " << m.GetSeconds());
 
   // Now delete all ack history with seq <= ack
   while (!m_history.empty ())
@@ -902,5 +943,65 @@ TdTcpTxSubflow::EstimateRtt (const TcpHeader& tcpHeader, const SequenceNumber32 
       NS_LOG_INFO (this << m_tcb->m_lastRtt << m_tcb->m_minRtt);
     }
 }
+
+void 
+TdTcpTxSubflow::UpdateAdaptivePacingRate(uint8_t fromsid)
+{
+  // uint64_t oldrate = m_tcb->m_currentPacingRate.GetBitRate() ;
+  // uint64_t propose = (uint64_t)(m_tcb->m_cWnd.Get() / m_tcb->m_minRtt.GetSeconds()) * 8;
+  // if (oldrate >= propose)
+  //   propose = oldrate * 9 / 10;
+  // else 
+  //   propose = propose * 11 / 10;
+  uint64_t win = std::max(m_tcb->m_cWnd.Get(), m_tcb->m_cWndInfl.Get()) + m_transmitForOther;// - BytesInFlight();
+  // uint64_t win = AvailableWindow();
+  // + m_transmitForOther;
+
+  Time otherRTT = m_meta->m_txsubflows[fromsid]->m_tcb->m_lastRtt.Get();
+  Time proposeSpread = m_lastAckDTime - m_disableingTime - otherRTT/2 + m_tcb->m_lastRtt.Get()/2;
+  // Time proposeSpread = m_tcb->m_lastRtt.Get()/2;
+
+  NS_LOG_INFO ("Proposed spreading cwnd " << win << " across " << 
+                proposeSpread.GetSeconds() << "seconds; CurrRTT is " <<
+                m_tcb->m_lastRtt.Get().GetSeconds());
+  m_paced = true;
+  if (proposeSpread.IsPositive())
+  {
+    //uint64_t rate = (uint64_t) (win / std::min(m_tcb->m_lastRtt.Get().GetSeconds(), proposeSpread.GetSeconds())) * 8;
+    uint64_t rate = (uint64_t) (win / proposeSpread.GetSeconds()) * 8;
+    // if (rate > m_maxPacedRate && m_tcb->m_cWnd < m_tcb->m_ssThresh)
+    // {
+    //   m_maxPacedRate = rate;
+    //   NS_LOG_INFO ("Updated max paced rate to " << m_maxPacedRate);
+    // }
+    //m_tcb->m_currentPacingRate = DataRate(std::min(rate, m_tcb->m_maxPacingRate.GetBitRate ()));
+    m_tcb->m_currentPacingRate = DataRate(rate);
+    NS_LOG_INFO ("Updated pacing rate of subflow " << (int)m_subflowid << " to " << m_tcb->m_currentPacingRate);
+  }
+  // else if (m_tcb->m_cWnd > m_tcb->m_ssThresh)
+  // {
+  //   // slow start & nodata...
+  //   m_paced = false;
+  //   NS_LOG_INFO ("Subflow " << (int)m_subflowid << " ss + no info, not paced");
+  // }
+  else
+  {
+    m_paced = true;
+    m_tcb->m_currentPacingRate = (uint64_t) (win / m_tcb->m_lastRtt.Get().GetSeconds());
+    NS_LOG_INFO ("Subflow " << (int)m_subflowid << " using paced rate " << m_tcb->m_currentPacingRate);
+  }
+
+  // m_tcb->m_currentPacingRate =
+  //   DataRate((uint64_t)win/m_tcb->m_lastRtt.Get().GetSeconds());
+}
+
+// void 
+// TdTcpTxSubflow::TransferForOther(uint64_t nBytes)
+// {
+//   m_tcb->m_cwnd -= nBytes;
+
+//   if ()
+// }
+
 
 }
