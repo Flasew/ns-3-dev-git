@@ -28,6 +28,7 @@
 #include "ns3/inet-socket-address.h"
 
 #include <map>
+#include <unordered_map>
 #include <vector>
 
 namespace ns3 {
@@ -360,9 +361,6 @@ protected:
 public:
   // change active subflow
   void ChangeActivateSubflow(uint8_t newsid);
-  void SetPacingRate (uint8_t subflowid, DataRate rate);
-  void SetMaxPacingRate (uint8_t subflowid, DataRate rate);
-  void SetPacingRatio (uint8_t subflowid, int ratio);
 
 private:
   std::vector<Ptr<TdTcpTxSubflow>> m_txsubflows; // send packet and eats ack
@@ -372,11 +370,10 @@ private:
   uint8_t m_tdNSubflows {2};
 
   uint32_t m_connDupAckTh {100};
-  std::map<SequenceNumber32, Ptr<TdTcpTxSubflow>> m_seqToSubflowMap;
-  std::map<uint8_t, DataRate> m_pacingRates;
-  std::map<uint8_t, DataRate> m_maxPacingRates;
-  std::map<uint8_t, int> m_pacingRatios;
 
+  std::map<SequenceNumber32, Ptr<TdTcpTxSubflow>> m_seqToSubflowMap;
+  std::multimap<SequenceNumber32, 
+    std::pair<Ptr<TdTcpTxSubflow>, int>> m_seqXRetransmit;
 
 };
 

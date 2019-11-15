@@ -104,9 +104,6 @@ private:
   uint64_t          m_maxPacedRate {0};
   int               m_pacingRatio {1};
 
-  uint64_t          m_transmitForOther {0};
-  // std::map<uint64_t, uint64_t> m_xtransmitcnt {};
-
   Ptr<TcpTxBuffer> m_txBuffer; //!< Tx buffer
 
   uint32_t m_dupAckCount {0};
@@ -125,16 +122,11 @@ private:
   Ptr<TcpCongestionOps>  m_congestionControl; //!< Congestion control
   Ptr<TcpRecoveryOps>    m_recoveryOps;       //!< Recovery Algorithm
 
-  std::pair<uint8_t, SequenceNumber32> m_lastXRetransmit;
-
   // Pacing related variable
   Timer m_pacingTimer {Timer::REMOVE_ON_DESTROY}; //!< Pacing Event
 
   TdTcpMappingContainer m_TxMappings;  //!< List of mappings to send
 
-  uint32_t m_lastCwnd {0};
-  // uint32_t m_inflatedWin {0};
-  // bool     m_useInflated {false};
 };
 
 

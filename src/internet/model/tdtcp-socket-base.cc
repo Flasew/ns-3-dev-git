@@ -433,15 +433,15 @@ TdTcpSocketBase::ProcessSynSent (Ptr<Packet> packet, const TcpHeader& tcpHeader)
 
     for (uint8_t i = 0; i < m_tdNSubflows; i++) {
       m_txsubflows.emplace_back(CreateObject<TdTcpTxSubflow>(i, this));
-      auto pacer = m_pacingRates.find(i);
-      if (pacer != m_pacingRates.end())
-        m_txsubflows[i]->m_tcb->m_currentPacingRate = pacer->second;
-      auto maxpacer = m_maxPacingRates.find(i);
-      if (maxpacer != m_maxPacingRates.end())
-        m_txsubflows[i]->m_tcb->m_maxPacingRate = maxpacer->second;
-      auto paceratio = m_pacingRatios.find(i);
-      if (paceratio != m_pacingRatios.end())
-        m_txsubflows[i]->m_pacingRatio = paceratio->second;
+      // auto pacer = m_pacingRates.find(i);
+      // if (pacer != m_pacingRates.end())
+      //   m_txsubflows[i]->m_tcb->m_currentPacingRate = pacer->second;
+      // auto maxpacer = m_maxPacingRates.find(i);
+      // if (maxpacer != m_maxPacingRates.end())
+      //   m_txsubflows[i]->m_tcb->m_maxPacingRate = maxpacer->second;
+      // auto paceratio = m_pacingRatios.find(i);
+      // if (paceratio != m_pacingRatios.end())
+      //   m_txsubflows[i]->m_pacingRatio = paceratio->second;
     }
 
     NS_LOG_DEBUG ("SYN_SENT -> ESTABLISHED");
@@ -561,12 +561,12 @@ TdTcpSocketBase::ProcessSynRcvd (Ptr<Packet> packet, const TcpHeader& tcpHeader,
 
     for (uint8_t i = 0; i < m_tdNSubflows; i++) {
       m_txsubflows.emplace_back(CreateObject<TdTcpTxSubflow>(i, this));
-      auto pacer = m_pacingRates.find(i);
-      if (pacer != m_pacingRates.end())
-        m_txsubflows[i]->m_tcb->m_currentPacingRate = pacer->second;
-      auto maxpacer = m_maxPacingRates.find(i);
-      if (maxpacer != m_maxPacingRates.end())
-        m_txsubflows[i]->m_tcb->m_maxPacingRate = maxpacer->second;
+      // auto pacer = m_pacingRates.find(i);
+      // if (pacer != m_pacingRates.end())
+      //   m_txsubflows[i]->m_tcb->m_currentPacingRate = pacer->second;
+      // auto maxpacer = m_maxPacingRates.find(i);
+      // if (maxpacer != m_maxPacingRates.end())
+      //   m_txsubflows[i]->m_tcb->m_maxPacingRate = maxpacer->second;
     }
 
     if (m_endPoint)
@@ -851,7 +851,6 @@ TdTcpSocketBase::ReceivedAck (Ptr<Packet> packet, const TcpHeader& tcpHeader)
       Ptr<TdTcpTxSubflow> tx;
       if ((tx = m_seqToSubflowMap[dack]))
       {
-        tx->m_lastXRetransmit = std::make_pair(0, SequenceNumber32(0));
         NS_LOG_INFO ("Connection level retransmit");
         tx->DoRetransmit();
         m_dupAckCount = 0;
@@ -868,6 +867,15 @@ TdTcpSocketBase::ReceivedAck (Ptr<Packet> packet, const TcpHeader& tcpHeader)
     NS_LOG_LOGIC ("New DataAck [" << dack  << "]");
     m_txBuffer->DiscardUpTo( dack );
     m_seqToSubflowMap.erase(m_seqToSubflowMap.begin(), m_seqToSubflowMap.lower_bound(dack));
+    m_seqXRetransmit.erase(m_seqXRetransmit.begin(), m_seqXRetransmit.lower_bound(dack));
+
+    NS_LOG_INFO ("m_seqToSubflowMap size: " << m_seqToSubflowMap.size() << 
+                 "; m_seqXRetransmit size: " << m_seqXRetransmit.size());
+    // auto ub = m_seqXRetransmit.upper_bound(dack);
+    // for (auto it = m_seqXRetransmit.begin(); it != ub; it++)
+    // {
+
+    // }
     NewAck(dack, false);
     m_dupAckCount = 0;
   }
@@ -1090,6 +1098,7 @@ TdTcpSocketBase::SendPendingData (bool withAck)
       NS_ASSERT(ok);
 
       m_seqToSubflowMap[dsnHead] = subflow;
+      // m_seqXRetransmit.insert({dsnHead, {subflow, length}});
       
       uint32_t sz = subflow->SendDataPacket (subflow->m_tcb->m_nextTxSequence, length, withAck);
 
@@ -1345,112 +1354,43 @@ void
 TdTcpSocketBase::ChangeActivateSubflow(uint8_t newsid) 
 {
   NS_LOG_FUNCTION (this << newsid);
-  
-  // if (m_state == TcpSocket::ESTABLISHED) {
-  NS_ASSERT (newsid < m_tdNSubflows);
 
-  uint8_t oldsid = m_currTxSubflow;
-  if (oldsid < m_txsubflows.size())
-  {
-    // m_txsubflows[oldsid]->m_disableingTime = Simulator::Now();
-    // m_txsubflows[oldsid]->m_tcb->m_cWnd /= m_txsubflows[oldsid]->m_pacingRatio;
-    NS_LOG_INFO ("Deflate subflow " << (int)oldsid << " cwnd back to " << m_txsubflows[oldsid]->m_tcb->m_cWnd.Get());
-    // m_txsubflows[m_currTxSubflow]->UpdateAdaptivePacingRate();
-  }
+  NS_ASSERT (newsid < m_tdNSubflows);
 
   m_currTxSubflow = newsid;
   if (m_currTxSubflow < m_txsubflows.size()) 
   {
-    // m_txsubflows[m_currTxSubflow]->m_tcb->m_cWnd *= m_txsubflows[newsid]->m_pacingRatio;
-    // NS_LOG_INFO ("inflate subflow " << (int)newsid << " cwnd back to " << m_txsubflows[newsid]->m_tcb->m_cWnd.Get());
-    m_txsubflows[m_currTxSubflow]->UpdateAdaptivePacingRate(oldsid);
+    m_txsubflows[m_currTxSubflow]->UpdateAdaptivePacingRate();
   }
   NS_LOG_LOGIC ("Changed current subflow to " << (int)newsid);
 
-  // if (newsid < m_txsubflows.size())
-
-
-  // if (!m_sendPendingDataEvent.IsRunning ())
-  // {
   m_sendPendingDataEvent = Simulator::ScheduleNow (&TdTcpSocketBase::SendPendingData,
                                                 this, m_connected);
-  // }
 
-  // else  
-  // {
-  //   NS_LOG_LOGIC ("Connection not established, change network ignored");
-  // }
-  // Dupack can be made adaptive here. No for now... 
-  // Will be enough debug work. 
-}
-
-void
-TdTcpSocketBase::SetPacingRate (uint8_t subflowid, DataRate rate) 
-{
-  m_pacingRates[subflowid] = rate;
-  if (m_txsubflows.size() > subflowid)
-    m_txsubflows[subflowid]->m_tcb->m_currentPacingRate = rate;
-}
-
-void
-TdTcpSocketBase::SetMaxPacingRate (uint8_t subflowid, DataRate rate) 
-{
-  m_maxPacingRates[subflowid] = rate;
-  if (m_txsubflows.size() > subflowid)
-    m_txsubflows[subflowid]->m_tcb->m_maxPacingRate = rate;
-}
-
-void 
-TdTcpSocketBase::SetPacingRatio (uint8_t subflowid, int ratio)
-{
-  m_pacingRatios[subflowid] = ratio;
-  if (m_txsubflows.size() > subflowid)
-    m_txsubflows[subflowid]->m_pacingRatio = ratio;
 }
 
 // void
-// TdTcpSocketBase::ProcessOptionTimestamp (const Ptr<const TcpOption> option,
-//                                        const SequenceNumber32 &seq)
+// TdTcpSocketBase::SetPacingRate (uint8_t subflowid, DataRate rate) 
 // {
-//   NS_LOG_FUNCTION (this << option);
-
-//   Ptr<const TcpOptionTS> ts = DynamicCast<const TcpOptionTS> (option);
-
-//   // This is valid only when no overflow occurs. It happens
-//   // when a connection last longer than 50 days.
-//   if (m_tcb->m_rcvTimestampValue > ts->GetTimestamp ())
-//     {
-//       // Do not save a smaller timestamp (probably there is reordering)
-//       return;
-//     }
-
-//   m_tcb->m_rcvTimestampValue = ts->GetTimestamp ();
-//   m_tcb->m_rcvTimestampEchoReply = ts->GetEcho ();
-
-//   if (seq == m_rxBuffer->NextRxSequence () && seq <= m_highTxAck)
-//     {
-//       m_timestampToEcho = ts->GetTimestamp ();
-//     }
-
-//   NS_LOG_INFO (m_node->GetId () << " Got timestamp=" <<
-//                m_timestampToEcho << " and Echo="     << ts->GetEcho ());
+//   m_pacingRates[subflowid] = rate;
+//   if (m_txsubflows.size() > subflowid)
+//     m_txsubflows[subflowid]->m_tcb->m_currentPacingRate = rate;
 // }
 
 // void
-// TdTcpSocketBase::AddOptionTimestamp (TcpHeader& header)
+// TdTcpSocketBase::SetMaxPacingRate (uint8_t subflowid, DataRate rate) 
 // {
-//   NS_LOG_FUNCTION (this << header);
-
-//   Ptr<TcpOptionTS> option = CreateObject<TcpOptionTS> ();
-
-//   option->SetTimestamp (TcpOptionTS::NowToTsValue ());
-//   option->SetEcho (m_timestampToEcho);
-
-//   header.AppendOption (option);
-//   NS_LOG_INFO (m_node->GetId () << " Add option TS, ts=" <<
-//                option->GetTimestamp () << " echo=" << m_timestampToEcho);
+//   m_maxPacingRates[subflowid] = rate;
+//   if (m_txsubflows.size() > subflowid)
+//     m_txsubflows[subflowid]->m_tcb->m_maxPacingRate = rate;
 // }
 
-
+// void 
+// TdTcpSocketBase::SetPacingRatio (uint8_t subflowid, int ratio)
+// {
+//   m_pacingRatios[subflowid] = ratio;
+//   if (m_txsubflows.size() > subflowid)
+//     m_txsubflows[subflowid]->m_pacingRatio = ratio;
+// }
 
 }
