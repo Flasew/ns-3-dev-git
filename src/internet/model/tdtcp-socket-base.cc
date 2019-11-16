@@ -433,15 +433,6 @@ TdTcpSocketBase::ProcessSynSent (Ptr<Packet> packet, const TcpHeader& tcpHeader)
 
     for (uint8_t i = 0; i < m_tdNSubflows; i++) {
       m_txsubflows.emplace_back(CreateObject<TdTcpTxSubflow>(i, this));
-      // auto pacer = m_pacingRates.find(i);
-      // if (pacer != m_pacingRates.end())
-      //   m_txsubflows[i]->m_tcb->m_currentPacingRate = pacer->second;
-      // auto maxpacer = m_maxPacingRates.find(i);
-      // if (maxpacer != m_maxPacingRates.end())
-      //   m_txsubflows[i]->m_tcb->m_maxPacingRate = maxpacer->second;
-      // auto paceratio = m_pacingRatios.find(i);
-      // if (paceratio != m_pacingRatios.end())
-      //   m_txsubflows[i]->m_pacingRatio = paceratio->second;
     }
 
     NS_LOG_DEBUG ("SYN_SENT -> ESTABLISHED");
@@ -559,14 +550,9 @@ TdTcpSocketBase::ProcessSynRcvd (Ptr<Packet> packet, const TcpHeader& tcpHeader,
     m_tcb->m_highTxMark = ++m_tcb->m_nextTxSequence;
     m_txBuffer->SetHeadSequence (m_tcb->m_nextTxSequence);
 
-    for (uint8_t i = 0; i < m_tdNSubflows; i++) {
+    for (uint8_t i = 0; i < m_tdNSubflows; i++) 
+    {
       m_txsubflows.emplace_back(CreateObject<TdTcpTxSubflow>(i, this));
-      // auto pacer = m_pacingRates.find(i);
-      // if (pacer != m_pacingRates.end())
-      //   m_txsubflows[i]->m_tcb->m_currentPacingRate = pacer->second;
-      // auto maxpacer = m_maxPacingRates.find(i);
-      // if (maxpacer != m_maxPacingRates.end())
-      //   m_txsubflows[i]->m_tcb->m_maxPacingRate = maxpacer->second;
     }
 
     if (m_endPoint)
@@ -966,19 +952,11 @@ TdTcpSocketBase::SendPendingData (bool withAck)
   
   // Don't pace if subflow avail window is small
   if (availableWindow <= subflow->m_tcb->m_segmentSize) 
-    // || subflow->m_tcb->m_cWnd < subflow->m_tcb->m_ssThresh)
   {
     NS_LOG_LOGIC("Disabling pacing due to small window");
-    // if (subflow->m_paced = true)
-    // {
-    //   subflow->m_tcb->m_cWnd = subflow->m_lastCwnd;
-    //   NS_LOG_LOGIC ("Rewinding cWnd to " << subflow->m_lastCwnd);
-    // }
     subflow->m_paced = false;
     m_pacingTimer.Cancel();
   }
-
-  // subflow->UpdateAdaptivePacingRate();
 
   // RFC 6675, Section (C)
   // If cwnd - pipe >= 1 SMSS, the sender SHOULD transmit one or more
@@ -1135,19 +1113,7 @@ TdTcpSocketBase::SendPendingData (bool withAck)
                     " size " << sz);
       ++nPacketsSent;
 
-    //   if (subflow->m_tcb->m_pacing)
-    //   {
-    //     NS_LOG_INFO ("Pacing is enabled");
-    //     if (m_pacingTimer.IsExpired ())
-    //     {
-    //       NS_LOG_DEBUG ("Current Pacing Rate " << subflow->m_tcb->m_currentPacingRate);
-    //       NS_LOG_DEBUG ("Timer is in expired state, activate it " << subflow->m_tcb->m_currentPacingRate.CalculateBytesTxTime (sz));
-    //       m_pacingTimer.Schedule (subflow->m_tcb->m_currentPacingRate.CalculateBytesTxTime (sz));
-    //       break;
-    //     }
-    //   }
     }
-
 
     // (C.4) The estimate of the amount of data outstanding in the
     //       network must be updated by incrementing pipe by the number
@@ -1331,7 +1297,10 @@ TdTcpSocketBase::ReTxTimeout ()
   subflow->m_congestionControl->CongestionStateSet (subflow->m_tcb, TcpSocketState::CA_LOSS);
   subflow->m_tcb->m_congState = TcpSocketState::CA_LOSS;
 
-  subflow->m_pacingTimer.Cancel ();
+  if (m_tcb->m_pacing)
+  {
+    subflow->m_pacingTimer.Cancel ();
+  }
 
   NS_LOG_DEBUG ("RTO. Reset cwnd to " <<  subflow->m_tcb->m_cWnd << ", ssthresh to " <<
                 subflow->m_tcb->m_ssThresh << ", restart from seqnum " <<
@@ -1358,7 +1327,7 @@ TdTcpSocketBase::ChangeActivateSubflow(uint8_t newsid)
   NS_ASSERT (newsid < m_tdNSubflows);
 
   m_currTxSubflow = newsid;
-  if (m_currTxSubflow < m_txsubflows.size()) 
+  if (m_currTxSubflow < m_txsubflows.size() && m_tcb->m_pacing) 
   {
     m_txsubflows[m_currTxSubflow]->UpdateAdaptivePacingRate();
   }
@@ -1368,29 +1337,5 @@ TdTcpSocketBase::ChangeActivateSubflow(uint8_t newsid)
                                                 this, m_connected);
 
 }
-
-// void
-// TdTcpSocketBase::SetPacingRate (uint8_t subflowid, DataRate rate) 
-// {
-//   m_pacingRates[subflowid] = rate;
-//   if (m_txsubflows.size() > subflowid)
-//     m_txsubflows[subflowid]->m_tcb->m_currentPacingRate = rate;
-// }
-
-// void
-// TdTcpSocketBase::SetMaxPacingRate (uint8_t subflowid, DataRate rate) 
-// {
-//   m_maxPacingRates[subflowid] = rate;
-//   if (m_txsubflows.size() > subflowid)
-//     m_txsubflows[subflowid]->m_tcb->m_maxPacingRate = rate;
-// }
-
-// void 
-// TdTcpSocketBase::SetPacingRatio (uint8_t subflowid, int ratio)
-// {
-//   m_pacingRatios[subflowid] = ratio;
-//   if (m_txsubflows.size() > subflowid)
-//     m_txsubflows[subflowid]->m_pacingRatio = ratio;
-// }
 
 }

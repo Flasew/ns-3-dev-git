@@ -74,9 +74,7 @@ TdTcpTxSubflow::TdTcpTxSubflow (uint8_t id, Ptr<TdTcpSocketBase> tdtcp)
   m_rto      = m_meta->m_rto.Get();
   m_minRto   = m_meta->m_minRto;
   m_clockGranularity = m_meta->m_clockGranularity;
-  // m_recoveryOps = 
-  // m_tcb->m_currentPacingRate = m_tcb->m_maxPacingRate;
-  // m_pacingTimer.SetFunction (&TdTcpSocketBase::NotifyPacingPerformed, m_meta);
+
   if (m_meta->m_congestionControl)
   {
     m_congestionControl = m_meta->m_congestionControl->Fork ();
@@ -94,6 +92,7 @@ TdTcpTxSubflow::TdTcpTxSubflow (uint8_t id, Ptr<TdTcpSocketBase> tdtcp)
   {
     m_recoveryOps = CreateObject<TcpClassicRecovery>();
   }
+  
 }
 
 TdTcpTxSubflow::~TdTcpTxSubflow() 
