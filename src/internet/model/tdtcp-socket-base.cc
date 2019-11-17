@@ -203,6 +203,8 @@ TdTcpSocketBase::CompleteFork (Ptr<Packet> packet, const TcpHeader& tcpHeader,
   uint8_t peernsubflow = ProcessOptionTdTcpCapable (tcpHeader.GetOption(TcpOption::TDTCP));
   NS_ASSERT(peernsubflow > 0);
 
+  //std::cerr << "LISTEN -> SYN_RCVD; peern = " << (int)peernsubflow << std::endl;
+
   for (uint8_t i = 0; i < peernsubflow; i++) {
     m_rxsubflows.emplace_back(CreateObject<TdTcpRxSubflow>(i, this));
   }
@@ -246,7 +248,9 @@ TdTcpSocketBase::SendSYN (bool withAck)
     header.SetDestinationPort (m_endPoint6->GetPeerPort ());
   }
 
+  //std::cerr << "adding TDCapable" << std::endl;
   AddOptionTdTcpCapable(header, m_tdNSubflows);
+
 
   if (m_winScalingEnabled)
   { // The window scaling option is set only on SYN packets
@@ -333,6 +337,7 @@ TdTcpSocketBase::ProcessOptionTdTcpCapable (const Ptr<const TcpOption> & opt) {
   if (!opt)
   {
     NS_LOG_WARN ("ProcessOption TDSYN received null pointer");
+    //std::cerr << "ProcessOption TDSYN received null pointer" << std::endl;
     return 0;
   }
 
@@ -340,6 +345,7 @@ TdTcpSocketBase::ProcessOptionTdTcpCapable (const Ptr<const TcpOption> & opt) {
   if (!tdc)
   {
     NS_LOG_WARN ("ProcessOption TDSYN some nonsense");
+    //std::cerr << "ProcessOption TDSYN received some nonsense" << std::endl;
     return 0;
   }
 
@@ -354,9 +360,11 @@ TdTcpSocketBase:: AddOptionTdTcpCapable(TcpHeader &header, uint8_t n)
 
   Ptr<TcpOptionTdTcpCapable> option = CreateObject<TcpOptionTdTcpCapable>();
   option->SetNSubflows(n);
-  NS_ASSERT(header.AppendOption(option));
+  header.AppendOption(option);
 
   NS_LOG_INFO (m_node->GetId() << " set a TDCapable with nsubflows=" << (int)n);
+  //std::cerr << m_node->GetId() << " set a TDCapable with nsubflows=" << (int)n << std::endl;
+  //std::cerr << "Header: " << header << std::endl;
 
 }
 
@@ -429,6 +437,7 @@ TdTcpSocketBase::ProcessSynSent (Ptr<Packet> packet, const TcpHeader& tcpHeader)
 
     for (uint8_t i = 0; i < peernsubflows; i++) {
       m_rxsubflows.emplace_back(CreateObject<TdTcpRxSubflow>(i, this));
+      //std::cerr << "SYN_SENT -> ESTABLISHED; peern = " << (int)peernsubflows << std::endl;
     }
 
     for (uint8_t i = 0; i < m_tdNSubflows; i++) {
@@ -968,6 +977,7 @@ TdTcpSocketBase::SendPendingData (bool withAck)
     if (m_tcb->m_pacing && subflow->m_paced)
     {
       NS_LOG_INFO ("Pacing is enabled");
+      // subflow->UpdateAdaptivePacingRate ();
       if (m_pacingTimer.IsRunning ())
       {
         NS_LOG_INFO ("Skipping Packet due to pacing" << m_pacingTimer.GetDelayLeft ());
@@ -1307,16 +1317,16 @@ TdTcpSocketBase::ReTxTimeout ()
                 subflow->m_txBuffer->HeadSequence () << " doubled rto to " <<
                 subflow->m_rto.GetSeconds () << " s");
 
-  NS_ASSERT_MSG (subflow->BytesInFlight () == 0, "There are some bytes in flight after an RTO: " <<
-                 subflow->BytesInFlight ());
+  // NS_ASSERT_MSG (subflow->BytesInFlight () == 0, "There are some bytes in flight after an RTO: " <<
+  //                subflow->BytesInFlight ());
 
   // SendPendingData (m_connected);
   // IDK... this doesn't make sense but what does?
   subflow->DoRetransmit();
 
-  NS_ASSERT_MSG (BytesInFlight () <= subflow->m_tcb->m_segmentSize,
-                 "In flight (" << BytesInFlight () <<
-                 ") there is more than one segment (" << subflow->m_tcb->m_segmentSize << ")");
+  // NS_ASSERT_MSG (subflow->BytesInFlight () <= subflow->m_tcb->m_segmentSize,
+  //                "In flight (" << BytesInFlight () <<
+  //                ") there is more than one segment (" << subflow->m_tcb->m_segmentSize << ")");
 }
 
 void
@@ -1326,11 +1336,25 @@ TdTcpSocketBase::ChangeActivateSubflow(uint8_t newsid)
 
   NS_ASSERT (newsid < m_tdNSubflows);
 
+  // if (m_currTxSubflow < m_txsubflows.size() && m_tcb->m_pacing) 
+  // {
+  //   auto sub = m_txsubflows[m_currTxSubflow];
+  //   sub->m_rateNextRound = 
+  //     sub->m_nbytesSentLastRound / (Simulator::Now() - sub->m_activateTime).GetSeconds() * 8;
+  // }
+
   m_currTxSubflow = newsid;
   if (m_currTxSubflow < m_txsubflows.size() && m_tcb->m_pacing) 
   {
-    m_txsubflows[m_currTxSubflow]->UpdateAdaptivePacingRate();
+    auto sub = m_txsubflows[m_currTxSubflow];
+    sub->UpdateAdaptivePacingRate();
+    // sub->m_nbytesSentLastRound = 0;
+    // sub->m_activateTime = Simulator::Now();
+    m_pacingTimer.Cancel();
+    m_pacingTimer.Schedule (sub->m_tcb->m_currentPacingRate.CalculateBytesTxTime (1));
   }
+  // m_pacingTimer.Cancel();
+
   NS_LOG_LOGIC ("Changed current subflow to " << (int)newsid);
 
   m_sendPendingDataEvent = Simulator::ScheduleNow (&TdTcpSocketBase::SendPendingData,

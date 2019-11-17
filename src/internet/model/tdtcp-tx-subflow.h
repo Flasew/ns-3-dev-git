@@ -127,6 +127,10 @@ private:
 
   TdTcpMappingContainer m_TxMappings;  //!< List of mappings to send
 
+  // uint64_t m_nbytesSentLastRound {0};
+  // Time m_activateTime            {Seconds (0.0)};
+  // uint64_t m_rateNextRound       {0};
+
 };
 
 

@@ -521,6 +521,7 @@ TcpHeader::GetOption(uint8_t kind) const
 
   for (i = m_options.begin (); i != m_options.end (); ++i)
     {
+      // std::cerr << "GetOption, kind = " << (int)kind << ", GetKind = " << (int)((*i)->GetKind ()) << std::endl;
       if ((*i)->GetKind () == kind)
         {
           return (*i);
