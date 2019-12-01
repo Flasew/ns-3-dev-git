@@ -52,6 +52,10 @@ TdTcpTxSubflow::GetdTypeId (void)
     .SetParent<Object> ()
     .SetGroupName ("Internet")
     .AddConstructor<TdTcpTxSubflow> ()
+    // .AddTraceSource ("CongestionWindow",
+    //              "The TCP connection's congestion window",
+    //              MakeTraceSourceAccessor (&TdTcpTxSubflow::m_cWndTrace),
+    //              "ns3::TracedValueCallback::Uint32")
   ;
   return tid;
 }
@@ -92,6 +96,13 @@ TdTcpTxSubflow::TdTcpTxSubflow (uint8_t id, Ptr<TdTcpSocketBase> tdtcp)
   {
     m_recoveryOps = CreateObject<TcpClassicRecovery>();
   }
+
+  bool ok = m_tcb->TraceConnectWithoutContext ("CongestionWindow",
+                                        MakeCallback (&TdTcpTxSubflow::UpdateCwnd, this));
+  NS_ASSERT (ok == true);
+  ok = m_tcb->TraceConnectWithoutContext ("CongState",
+                                        MakeCallback (&TdTcpTxSubflow::UpdateCongState, this));
+  NS_ASSERT (ok == true);
   
 }
 
@@ -118,6 +129,7 @@ TdTcpTxSubflow::ReceivedAck(uint8_t acid, Ptr<Packet> p, const TcpHeader& tcpHea
   // }
 
   m_txBuffer->DiscardUpTo (ackNumber);
+  m_TxMappings.DiscardUpTo (ackNumber);
 
   if (SequenceNumber32(sack) > m_highRxAckMark)
   {
@@ -137,6 +149,7 @@ TdTcpTxSubflow::ReceivedAck(uint8_t acid, Ptr<Packet> p, const TcpHeader& tcpHea
   // are inside the function ProcessAck
   ProcessAck (ackNumber, oldHeadSequence);
 
+  UpdateAdaptivePacingRate(false);
   // RFC 6675, Section 5, point (C), try to send more data. NB: (C) is implemented
   // inside SendPendingData
   if (m_meta->m_currTxSubflow == m_subflowid)
@@ -339,8 +352,10 @@ TdTcpTxSubflow::ProcessAck (const SequenceNumber32 &ackNumber,
                   // packet algorithm from FACK to NewReno. We simply go back in Open.
                   m_congestionControl->CongestionStateSet (m_tcb, TcpSocketState::CA_OPEN);
                   m_tcb->m_congState = TcpSocketState::CA_OPEN;
+
                   NS_LOG_DEBUG (segsAcked << " segments acked in CA_DISORDER, ack of " <<
                                 ackNumber << " exiting CA_DISORDER -> CA_OPEN");
+
                 }
               else
                 {
@@ -374,6 +389,7 @@ TdTcpTxSubflow::ProcessAck (const SequenceNumber32 &ackNumber,
 
               NS_LOG_DEBUG (segsAcked << " segments acked in CA_RECOVER, ack of " <<
                             ackNumber << ", exiting CA_RECOVERY -> CA_OPEN");
+              UpdateAdaptivePacingRate(true);
             }
           else if (m_tcb->m_congState == TcpSocketState::CA_LOSS)
             {
@@ -390,6 +406,7 @@ TdTcpTxSubflow::ProcessAck (const SequenceNumber32 &ackNumber,
               m_tcb->m_congState = TcpSocketState::CA_OPEN;
               NS_LOG_DEBUG (segsAcked << " segments acked in CA_LOSS, ack of" <<
                             ackNumber << ", exiting CA_LOSS -> CA_OPEN");
+              // UpdateAdaptivePacingRate(true);
             }
 
           if (exitedFastRecovery)
@@ -613,6 +630,11 @@ TdTcpTxSubflow::NewAck (SequenceNumber32 const& ack, bool resetRTO)
   NS_LOG_LOGIC ("TCP " << this << " NewAck " << ack <<
                 " numberAck " << (ack - m_txBuffer->HeadSequence ())); // Number bytes ack'ed
 
+  if (m_meta->m_currTxSubflow == m_subflowid)
+  {
+    m_paced = false;
+  }
+
   if (m_txBuffer->Available () > 0)
   {
     m_meta->NotifySend (m_txBuffer->Available ());
@@ -683,6 +705,10 @@ TdTcpTxSubflow::SendDataPacket (SequenceNumber32 seq,
     Ptr<TdTcpTxSubflow> carrier = m_meta->m_txsubflows[m_meta->m_currTxSubflow];
 
     m_meta->m_seqXRetransmit.insert({dseq + SequenceNumber32(sz), std::make_pair(carrier, sz)});
+
+    m_meta->m_pacingTimer.Cancel();
+    m_meta->m_pacingTimer.Schedule (carrier->m_tcb->m_currentPacingRate.CalculateBytesTxTime (sz));
+    carrier->m_paced = true;
     // carrier->m_nbytesSentLastRound += sz;
 
     // uint32_t carrierCWND = carrier->m_tcb->m_cWnd;
@@ -801,8 +827,11 @@ TdTcpTxSubflow::BytesInFlight () const
   uint32_t bytesInFlight = m_txBuffer->BytesInFlight ();
   for (auto it = m_meta->m_seqXRetransmit.begin(); it != m_meta->m_seqXRetransmit.end(); it++)
   {
-    if (it->second.first == this)
+    if (it->second.first == this) 
+    {
       bytesInFlight += it->second.second;
+      // std::cerr << "ACCOUNTING " << it->second.second << " CROSS FLOW DATA " << std::endl;
+    }
   }
   // Ugly, but we are not modifying the state; m_bytesInFlight is used
   // only for tracing purpose.
@@ -932,24 +961,39 @@ TdTcpTxSubflow::EstimateRtt (const TcpHeader& tcpHeader, const SequenceNumber32 
     }
 }
 
+void
+TdTcpTxSubflow::UpdateCwnd (uint32_t oldValue, uint32_t newValue)
+{
+  m_cWndTrace (m_meta, m_subflowid, oldValue, newValue);
+}
+
+void
+TdTcpTxSubflow::UpdateCongState (TcpSocketState::TcpCongState_t oldValue,
+                                TcpSocketState::TcpCongState_t newValue)
+{
+  m_congStateTrace (m_meta, m_subflowid, oldValue, newValue);
+}
+
 void 
-TdTcpTxSubflow::UpdateAdaptivePacingRate()
+TdTcpTxSubflow::UpdateAdaptivePacingRate(bool resetEnable)
 {
   uint64_t win = std::max(m_tcb->m_cWnd.Get(), m_tcb->m_cWndInfl.Get());
   Time proposeSpread = m_tcb->m_lastRtt.Get();
 
   NS_LOG_INFO ("Proposed spreading cwnd " << win << " across " << 
                 proposeSpread.GetSeconds() << "seconds");
-  m_paced = true;
+  m_paced = resetEnable;
 
   double rate = (win / proposeSpread.GetSeconds()) * 8;
   // rate *= (1 + std::cbrt((double)m_tcb->m_segmentSize/win) + std::cbrt((double)m_tcb->m_segmentSize/(std::max(AvailableWindow () - m_tcb->m_segmentSize, (uint32_t)1))));
-  rate *= (1 + (double)BytesInFlight()/win);
+  // rate *= (1 + (double)BytesInFlight()/win);
   m_tcb->m_currentPacingRate = DataRate((uint64_t)rate);
   // 
   // m_tcb->m_currentPacingRate = DataRate((uint64_t)2 * m_rateNextRound);
   NS_LOG_INFO ("Updated pacing rate of subflow " << (int)m_subflowid << " to " << m_tcb->m_currentPacingRate);
 }
+
+
 
 
 }

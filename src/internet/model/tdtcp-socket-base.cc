@@ -442,6 +442,14 @@ TdTcpSocketBase::ProcessSynSent (Ptr<Packet> packet, const TcpHeader& tcpHeader)
 
     for (uint8_t i = 0; i < m_tdNSubflows; i++) {
       m_txsubflows.emplace_back(CreateObject<TdTcpTxSubflow>(i, this));
+      if (m_cwndTraceFile)
+      {
+        m_txsubflows.back()->m_cWndTrace = &TdTcpSocketBase::CwndTrace;
+        m_txsubflows.back()->m_congStateTrace = &TdTcpSocketBase::CongStateTrace;
+        // std::cerr << "trace connecting " << 
+        // m_txsubflows.back()->TraceConnect("CongestionWindow", std::to_string((int)i),  MakeCallback (&TdTcpSocketBase::CwndTrace, this))
+        // << std::endl;
+      }
     }
 
     NS_LOG_DEBUG ("SYN_SENT -> ESTABLISHED");
@@ -562,6 +570,14 @@ TdTcpSocketBase::ProcessSynRcvd (Ptr<Packet> packet, const TcpHeader& tcpHeader,
     for (uint8_t i = 0; i < m_tdNSubflows; i++) 
     {
       m_txsubflows.emplace_back(CreateObject<TdTcpTxSubflow>(i, this));
+      if (m_cwndTraceFile)
+      {
+        m_txsubflows.back()->m_cWndTrace = &TdTcpSocketBase::CwndTrace;
+        m_txsubflows.back()->m_congStateTrace = &TdTcpSocketBase::CongStateTrace;
+        // std::cerr << "trace connecting " << 
+        // m_txsubflows.back()->TraceConnect("CongestionWindow", std::to_string((int)i),  MakeCallback (&TdTcpSocketBase::CwndTrace, this))
+        // << std::endl;
+      }
     }
 
     if (m_endPoint)
@@ -960,7 +976,7 @@ TdTcpSocketBase::SendPendingData (bool withAck)
   NS_LOG_INFO ("Subflow " << m_currTxSubflow << " availableWindow " << availableWindow);
   
   // Don't pace if subflow avail window is small
-  if (availableWindow <= subflow->m_tcb->m_segmentSize) 
+  if (availableWindow <= 10 * subflow->m_tcb->m_segmentSize) 
   {
     NS_LOG_LOGIC("Disabling pacing due to small window");
     subflow->m_paced = false;
@@ -974,10 +990,10 @@ TdTcpSocketBase::SendPendingData (bool withAck)
   // else branch to control silly window syndrome and Nagle)
   while (availableWindow > 0)
   {
-    if (m_tcb->m_pacing && subflow->m_paced)
+    if (subflow->m_paced && m_tcb->m_pacing)
     {
       NS_LOG_INFO ("Pacing is enabled");
-      // subflow->UpdateAdaptivePacingRate ();
+      // subflow->UpdateAdaptivePacingRate (false);
       if (m_pacingTimer.IsRunning ())
       {
         NS_LOG_INFO ("Skipping Packet due to pacing" << m_pacingTimer.GetDelayLeft ());
@@ -1038,7 +1054,7 @@ TdTcpSocketBase::SendPendingData (bool withAck)
         break;
       }
 
-      if (subflow->m_tcb->m_nextTxSequence != subflow->FirstUnmappedSSN())
+      if (subflow->m_tcb->m_nextTxSequence != subflow->m_tcb->m_highTxMark)
       {
         NS_LOG_DEBUG ("Current active subflow has retransmit, delaying new data");
         break;
@@ -1347,7 +1363,7 @@ TdTcpSocketBase::ChangeActivateSubflow(uint8_t newsid)
   if (m_currTxSubflow < m_txsubflows.size() && m_tcb->m_pacing) 
   {
     auto sub = m_txsubflows[m_currTxSubflow];
-    sub->UpdateAdaptivePacingRate();
+    sub->UpdateAdaptivePacingRate(true);
     // sub->m_nbytesSentLastRound = 0;
     // sub->m_activateTime = Simulator::Now();
     m_pacingTimer.Cancel();
@@ -1361,5 +1377,45 @@ TdTcpSocketBase::ChangeActivateSubflow(uint8_t newsid)
                                                 this, m_connected);
 
 }
+
+void 
+TdTcpSocketBase::SetFlowId (int id)
+{
+  m_flowid = id;
+}
+
+void 
+TdTcpSocketBase::SetcWndTraceFile (std::ofstream * ofile)
+{
+  m_cwndTraceFile = ofile;
+  // std::cerr << "setting ofile" << std::endl;
+}
+
+void 
+TdTcpSocketBase::CwndTrace(Ptr<TdTcpSocketBase> socket, int id, uint32_t oldval, uint32_t newval)
+{
+  *(socket->m_cwndTraceFile) << Simulator::Now().GetNanoSeconds() << ", " 
+                             << socket->m_flowid << ", " << id << ", " 
+                             << newval << std::endl;
+  // std::cerr << "ssss." << std::endl;
+}
+
+void 
+TdTcpSocketBase::SetCongStateTraceFile (std::ofstream * ofile)
+{
+  m_congStateTraceFile = ofile;
+  // std::cerr << "setting ofile" << std::endl;
+}
+
+void
+TdTcpSocketBase::CongStateTrace (Ptr<TdTcpSocketBase> socket, int id, 
+  const TcpSocketState::TcpCongState_t oldValue, 
+  const TcpSocketState::TcpCongState_t newValue)
+{
+  *(socket->m_congStateTraceFile) << Simulator::Now().GetNanoSeconds() << ", " 
+                             << socket->m_flowid << ", " << id << ", " 
+                             << oldValue << ", " << newValue << std::endl;
+}
+
 
 }

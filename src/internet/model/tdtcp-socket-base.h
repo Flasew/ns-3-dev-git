@@ -358,9 +358,18 @@ protected:
   void SendSYN(bool withAck = false);
   void SendHandShakeACK ();
   void SendAckPacket (uint8_t subflowid, uint8_t scid, uint32_t sack);
+
 public:
   // change active subflow
   void ChangeActivateSubflow(uint8_t newsid);
+  void SetFlowId (int id);
+  void SetcWndTraceFile (std::ofstream * ofile);
+  void SetCongStateTraceFile (std::ofstream * ofile);
+  
+  static void CwndTrace(Ptr<TdTcpSocketBase> socket, int id, uint32_t oldval, uint32_t newval);
+  static void CongStateTrace (Ptr<TdTcpSocketBase> socket, int id, 
+    const TcpSocketState::TcpCongState_t oldValue, 
+    const TcpSocketState::TcpCongState_t newValue);
 
 private:
   std::vector<Ptr<TdTcpTxSubflow>> m_txsubflows; // send packet and eats ack
@@ -374,6 +383,12 @@ private:
   std::map<SequenceNumber32, Ptr<TdTcpTxSubflow>> m_seqToSubflowMap;
   std::multimap<SequenceNumber32, 
     std::pair<Ptr<TdTcpTxSubflow>, int>> m_seqXRetransmit;
+
+  int             m_flowid               {0};
+  std::ofstream * m_cwndTraceFile {nullptr};
+  std::ofstream * m_congStateTraceFile {nullptr};
+  // void CwndTrace(std::string ctxt, uint32_t newval, uint32_t newval);
+
 
 };
 

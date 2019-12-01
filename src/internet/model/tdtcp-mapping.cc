@@ -199,9 +199,9 @@ void
 TdTcpMappingContainer::Dump() const
 {
   NS_LOG_UNCOND("\n==== Dumping list of mappings ====");
-  for( MappingList::const_iterator it = m_mappings.begin(); it != m_mappings.end(); it++ )
+  for( auto it = m_mappings.begin(); it != m_mappings.end(); it++ )
   {
-    NS_LOG_UNCOND( *it );
+    NS_LOG_UNCOND( it->first << ", " << it->second );
   }
   NS_LOG_UNCOND("==== End of dump ====\n");
 }
@@ -213,9 +213,10 @@ TdTcpMappingContainer::AddMapping(const TdTcpMapping& mapping)
   NS_LOG_LOGIC("Adding mapping " << mapping);
 
   NS_ASSERT(mapping.GetLength() != 0);
-  std::pair<MappingList::iterator,bool> res = m_mappings.insert( mapping);
+  m_mappings[mapping.HeadSSN()] = mapping;
+  // std::pair<MappingList::iterator,bool> res = m_mappings.insert( mapping);
 
-  return res.second;
+  return true;
 }
 
 bool
@@ -226,7 +227,7 @@ TdTcpMappingContainer::FirstUnmappedSSN(SequenceNumber32& ssn) const
   {
       return false;
   }
-  ssn = m_mappings.rbegin()->TailSSN() + 1;
+  ssn = m_mappings.rbegin()->second.TailSSN() + 1;
   return true;
 }
 
@@ -234,22 +235,32 @@ bool
 TdTcpMappingContainer::DiscardMapping(const TdTcpMapping& mapping)
 {
   NS_LOG_LOGIC("discard mapping "<< mapping);
-  return m_mappings.erase(mapping);
+  return m_mappings.erase(mapping.HeadSSN());
 }
 
-bool
-TdTcpMappingContainer::GetMappingsStartingFromSSN(SequenceNumber32 ssn, std::set<TdTcpMapping>& missing)
+void
+TdTcpMappingContainer::DiscardUpTo(const SequenceNumber32 & seq)
 {
-  NS_LOG_FUNCTION(this << ssn );
-  missing.clear();
-  //http://www.cplusplus.com/reference/algorithm/equal_range/
-  TdTcpMapping temp;
-  temp.MapToSSN(ssn);
-  MappingList::const_iterator it = std::lower_bound( m_mappings.begin(), m_mappings.end(), temp);
-
-  std::copy(it, m_mappings.end(), std::inserter(missing, missing.begin()));
-  return false;
+  NS_LOG_LOGIC("discard mapping up to"<< seq);
+  // TdTcpMapping fake;
+  // fake.MapToSSN(seq);
+  m_mappings.erase(m_mappings.begin(), m_mappings.lower_bound(seq));
 }
+
+
+// bool
+// TdTcpMappingContainer::GetMappingsStartingFromSSN(SequenceNumber32 ssn, std::set<TdTcpMapping>& missing)
+// {
+//   NS_LOG_FUNCTION(this << ssn );
+//   missing.clear();
+//   //http://www.cplusplus.com/reference/algorithm/equal_range/
+//   TdTcpMapping temp;
+//   temp.MapToSSN(ssn);
+//   MappingList::const_iterator it = std::lower_bound( m_mappings.begin(), m_mappings.end(), temp);
+
+//   std::copy(it, m_mappings.end(), std::inserter(missing, missing.begin()));
+//   return false;
+// }
 
 bool
 TdTcpMappingContainer::GetMappingForSSN(const SequenceNumber32& ssn, TdTcpMapping& mapping) const
@@ -257,15 +268,16 @@ TdTcpMappingContainer::GetMappingForSSN(const SequenceNumber32& ssn, TdTcpMappin
   NS_LOG_FUNCTION(this << ssn);
   if(m_mappings.empty())
     return false;
-  TdTcpMapping temp;
-  temp.MapToSSN(ssn);
+  // TdTcpMapping temp;
+  // temp.MapToSSN(ssn);
 
-  // Returns the first that is not less
-  // upper_bound returns the greater
-  MappingList::const_iterator it = std::upper_bound( m_mappings.begin(), m_mappings.end(), temp);
-  it--;
-  mapping = *it;
-  return mapping.IsSSNInRange( ssn );               // IsSSNInRange() return ( (HeadSSN() <= ssn) && (TailSSN() >= ssn) );
+  // // Returns the first that is not less
+  // // upper_bound returns the greater
+  // MappingList::const_iterator it = std::upper_bound( m_mappings.begin(), m_mappings.end(), temp);
+  // it--;
+  // mapping = *it;
+  mapping = m_mappings.find(ssn)->second;
+  return true;               // IsSSNInRange() return ( (HeadSSN() <= ssn) && (TailSSN() >= ssn) );
 }
 
 } // namespace ns3

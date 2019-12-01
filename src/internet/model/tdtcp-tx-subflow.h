@@ -82,7 +82,16 @@ public:
   SequenceNumber32 FirstUnmappedSSN();
   void EstimateRtt (const TcpHeader& tcpHeader, const SequenceNumber32 & ackNumber);
   void UpdateAdaptivePacingRate (uint8_t fromsid);
-  void UpdateAdaptivePacingRate();
+  void UpdateAdaptivePacingRate(bool resetEnable);
+
+  void UpdateCwnd (uint32_t oldValue, uint32_t newValue);
+  void UpdateCongState (TcpSocketState::TcpCongState_t oldValue,
+                                TcpSocketState::TcpCongState_t newValue);
+  void (*m_cWndTrace)(Ptr<TdTcpSocketBase>, int, uint32_t, uint32_t);
+  void (*m_congStateTrace)(Ptr<TdTcpSocketBase>, int, TcpSocketState::TcpCongState_t, TcpSocketState::TcpCongState_t);
+
+  // void SetFlowId (int id);
+  // void SetcWndTraceFile (std::ofstream * ofile);
 
 private:
 
@@ -126,6 +135,10 @@ private:
   Timer m_pacingTimer {Timer::REMOVE_ON_DESTROY}; //!< Pacing Event
 
   TdTcpMappingContainer m_TxMappings;  //!< List of mappings to send
+
+  // int             m_flowid               {0};
+  // std::ofstream * m_cwndTraceFille {nullptr};
+  // void CwndTrace(std::string ctxt, uint32_t old, uint32_t new);
 
   // uint64_t m_nbytesSentLastRound {0};
   // Time m_activateTime            {Seconds (0.0)};

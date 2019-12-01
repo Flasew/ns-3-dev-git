@@ -191,6 +191,7 @@ public:
    * \param mapping to be discarded
    */
   bool DiscardMapping(const TdTcpMapping& mapping);
+  void DiscardUpTo(const SequenceNumber32 & seq);
 
   /**
    * \param firstUnmappedSsn last mapped SSN.
@@ -222,11 +223,11 @@ public:
   /**
    * \param dsn
    */
-  virtual bool GetMappingsStartingFromSSN(SequenceNumber32 ssn, std::set<TdTcpMapping>& mappings);
+  // virtual bool GetMappingsStartingFromSSN(SequenceNumber32 ssn, std::set<TdTcpMapping>& mappings);
 
 protected:
 
-    std::set<TdTcpMapping> m_mappings;     //!< it is a set ordered by SSN
+    std::map<SequenceNumber32, TdTcpMapping> m_mappings;     //!< it is a set ordered by SSN
 };
 
 std::ostream& operator<<(std::ostream &os, const TdTcpMapping& mapping);

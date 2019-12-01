@@ -162,9 +162,10 @@ std::normal_distribution<double> TopoHelper::rjitnd = std::normal_distribution<d
 std::normal_distribution<double> tjitnd;
 
 std::ofstream qllog;
-std::ofstream frlog;
-std::ofstream lolog;
+// std::ofstream frlog;
+// std::ofstream lolog;
 std::ofstream cwndlog;
+std::ofstream congStatelog;
 std::ofstream config;
 
 std::string bwt_str;
@@ -229,35 +230,35 @@ void QlTrace (std::string ctxt, uint32_t oldValue, uint32_t newValue)
 
 }
 
-static void CwndTrace (std::string ctxt, uint32_t oldValue, uint32_t newValue)
-{
-  if (cwndlog.is_open()) 
-    cwndlog <<  Simulator::Now().GetNanoSeconds() << ", " << ctxt << ", " << newValue << std::endl;
-}
+// static void CwndTrace (std::string ctxt, uint32_t oldValue, uint32_t newValue)
+// {
+//   if (cwndlog.is_open()) 
+//     cwndlog <<  Simulator::Now().GetNanoSeconds() << ", " << ctxt << ", " << newValue << std::endl;
+// }
 
-std::vector<uint64_t> frdata;
-std::vector<uint64_t> lodata;
+// std::vector<uint64_t> frdata;
+// std::vector<uint64_t> lodata;
 
-static void
-CongStateTrace (std::string ctxt, 
-  const TcpSocketState::TcpCongState_t oldValue, 
-  const TcpSocketState::TcpCongState_t newValue)
-{
-  uint64_t flowid = stoi(ctxt);
+// static void
+// CongStateTrace (std::string ctxt, 
+//   const TcpSocketState::TcpCongState_t oldValue, 
+//   const TcpSocketState::TcpCongState_t newValue)
+// {
+//   uint64_t flowid = stoi(ctxt);
 
-  if (oldValue != TcpSocketState::CA_RECOVERY && newValue == TcpSocketState::CA_RECOVERY) {
-    ++frdata[flowid]; 
-    if (frlog.is_open())
-      frlog <<  Simulator::Now().GetNanoSeconds() << ", " << ctxt << ", " << frdata[flowid] << std::endl;
-  }
+//   if (oldValue != TcpSocketState::CA_RECOVERY && newValue == TcpSocketState::CA_RECOVERY) {
+//     ++frdata[flowid]; 
+//     if (frlog.is_open())
+//       frlog <<  Simulator::Now().GetNanoSeconds() << ", " << ctxt << ", " << frdata[flowid] << std::endl;
+//   }
 
-  if (oldValue != TcpSocketState::CA_LOSS && newValue == TcpSocketState::CA_LOSS) {
-    ++lodata[flowid];
-    if (lolog.is_open())
-      lolog <<  Simulator::Now().GetNanoSeconds() << ", " << ctxt << ", " << lodata[flowid] << std::endl;
-  }
+//   if (oldValue != TcpSocketState::CA_LOSS && newValue == TcpSocketState::CA_LOSS) {
+//     ++lodata[flowid];
+//     if (lolog.is_open())
+//       lolog <<  Simulator::Now().GetNanoSeconds() << ", " << ctxt << ", " << lodata[flowid] << std::endl;
+//   }
 
-}
+// }
 
 static void
 TcpStateTrace (std::string ctxt, 
@@ -374,11 +375,14 @@ void ParseBWP(std::string & p)
     // oss << "./lolog" << std::put_time(&tm, "_%m_%d_%Y_%H_%M_%S");
     // lolog.open(oss.str());
 
-    /*
-    oss.str("");
-    oss << "./cwndlog" << std::put_time(&tm, "_%m_%d_%Y_%H_%M_%S");
-    cwndlog.open(oss.str());
-  */
+    
+  oss.str("");
+  oss << "./cwndlog" << std::put_time(&tm, "_%m_%d_%Y_%H_%M_%S");
+  cwndlog.open(oss.str());
+
+  oss.str("");
+  oss << "./congStatelog" << std::put_time(&tm, "_%m_%d_%Y_%H_%M_%S");
+  congStatelog.open(oss.str());
 
   oss.str("");
   oss << "./config" << std::put_time(&tm, "_%m_%d_%Y_%H_%M_%S.json");
@@ -458,8 +462,8 @@ void ParseBWP(std::string & p)
   FlowMonitorHelper flowHelper;
   flowMonitor = flowHelper.InstallAll();
 
-  frdata = std::vector<uint64_t>(nflows*2, 0);
-  lodata = std::vector<uint64_t>(nflows*2, 0);
+  // frdata = std::vector<uint64_t>(nflows*2, 0);
+  // lodata = std::vector<uint64_t>(nflows*2, 0);
   syndata = std::vector<uint64_t>(nflows*2, 0);
 
   Config::SetDefault("ns3::TcpSocket::SegmentSize", UintegerValue (1424));
@@ -494,6 +498,7 @@ void ParseBWP(std::string & p)
     // Ptr<TcpRecoveryOps> rec = CreateObject<TcpPrrRecovery>();
     // sb->SetRecoveryAlgorithm(rec);
     sb->SetRetxThresh(dupackth);
+    sb->SetFlowId((int)i);
     // sb->SetMaxPacingRate(0, DataRate("10Gbps"));
     // sb->SetMaxPacingRate(1, DataRate("1Gbps"));
     // sb->SetPacingRatio(0, 10);
@@ -503,8 +508,15 @@ void ParseBWP(std::string & p)
 
     std::cout << ns3TcpSocket->Bind(InetSocketAddress(sendPortBase+i)) << std::endl;
 
-    ns3TcpSocket->TraceConnect("CongestionWindow", std::to_string(i),  MakeCallback (&CwndTrace));
-    ns3TcpSocket->TraceConnect("CongState", std::to_string(i),  MakeCallback (&CongStateTrace));
+    // ns3TcpSocket->TraceConnect("CongestionWindow", std::to_string(i),  MakeCallback (&CwndTrace));
+    if (cwndlog.is_open()) {
+      sb->SetcWndTraceFile(&cwndlog);
+    }
+    if (congStatelog.is_open()) {
+      sb->SetCongStateTraceFile(&congStatelog);
+    }
+
+    // ns3TcpSocket->TraceConnect("CongState", std::to_string(i),  MakeCallback (&CongStateTrace));
     ns3TcpSocket->TraceConnect("State", std::to_string(i),  MakeCallback (&TcpStateTrace));
     ns3TcpSocket->TraceConnect("Tx", std::to_string(i),  MakeCallback (&TxPktTrace));
 
@@ -534,8 +546,8 @@ void ParseBWP(std::string & p)
 
       ns3TcpSocket->Bind(InetSocketAddress(sendPortBase+i));
 
-      ns3TcpSocket->TraceConnect ("CongestionWindow", std::to_string(i),  MakeCallback (&CwndTrace));
-      ns3TcpSocket->TraceConnect ("CongState", std::to_string(i),  MakeCallback (&CongStateTrace));
+      // ns3TcpSocket->TraceConnect ("CongestionWindow", std::to_string(i),  MakeCallback (&CwndTrace));
+      // ns3TcpSocket->TraceConnect ("CongState", std::to_string(i),  MakeCallback (&CongStateTrace));
       ns3TcpSocket->TraceConnect ("State", std::to_string(i),  MakeCallback (&TcpStateTrace));
       ns3TcpSocket->TraceConnect ("Tx", std::to_string(i),  MakeCallback (&TxPktTrace));
 
@@ -607,8 +619,8 @@ void ParseBWP(std::string & p)
   for (uint64_t k = 0; k < nflows; k++) {
     config << "\t\t{" << std::endl; 
     config << "\t\t\t\"port\":\t" << (1 + k + sendPortBase) << "," << std::endl; 
-    config << "\t\t\t\"retransmit\":\t" << frdata[k] << "," << std::endl; 
-    config << "\t\t\t\"timeout\":\t" << lodata[k] << "," << std::endl; 
+    // config << "\t\t\t\"retransmit\":\t" << frdata[k] << "," << std::endl; 
+    // config << "\t\t\t\"timeout\":\t" << lodata[k] << "," << std::endl; 
     config << "\t\t\t\"syn_sent\":\t" << syndata[k] << std::endl; 
     config << "\t\t}" << (k == nflows-1 ? "" : ",") << std::endl; 
   }
@@ -619,7 +631,7 @@ void ParseBWP(std::string & p)
   qllog.close();
   // frlog.close();
   // lolog.close();
-  // cwndlog.close();
+  cwndlog.close();
 
   config.close();
 
