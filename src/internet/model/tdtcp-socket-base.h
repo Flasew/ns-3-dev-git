@@ -362,6 +362,7 @@ protected:
 public:
   // change active subflow
   void ChangeActivateSubflow(uint8_t newsid);
+  void ChangeActivateSubflowGuarded(uint8_t newsid, Time aftertime);
   void SetFlowId (int id);
   void SetcWndTraceFile (std::ofstream * ofile);
   void SetCongStateTraceFile (std::ofstream * ofile);
@@ -378,7 +379,9 @@ private:
 
   uint8_t m_tdNSubflows {2};
 
-  uint32_t m_connDupAckTh {100};
+  uint32_t m_connDupAckTh {10};
+
+  Time m_guardtime {MicroSeconds(8)};
 
   std::map<SequenceNumber32, Ptr<TdTcpTxSubflow>> m_seqToSubflowMap;
   std::multimap<SequenceNumber32, 

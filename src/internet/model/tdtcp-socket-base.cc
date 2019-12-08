@@ -1006,6 +1006,12 @@ TdTcpSocketBase::SendPendingData (bool withAck)
       NS_LOG_INFO ("Subflow indicates no pacing.");
     }
 
+    if (subflow->m_guarded)
+    {
+      NS_LOG_INFO ("Guarded subflow");
+      break;
+    }
+
     if (subflow->m_tcb->m_congState == TcpSocketState::CA_OPEN
         && m_state == TcpSocket::FIN_WAIT_1)
     {
@@ -1325,7 +1331,7 @@ TdTcpSocketBase::ReTxTimeout ()
 
   if (m_tcb->m_pacing)
   {
-    subflow->m_pacingTimer.Cancel ();
+    m_pacingTimer.Cancel ();
   }
 
   NS_LOG_DEBUG ("RTO. Reset cwnd to " <<  subflow->m_tcb->m_cWnd << ", ssthresh to " <<
@@ -1364,17 +1370,48 @@ TdTcpSocketBase::ChangeActivateSubflow(uint8_t newsid)
   {
     auto sub = m_txsubflows[m_currTxSubflow];
     sub->UpdateAdaptivePacingRate(true);
+    m_sendPendingDataEvent = Simulator::Schedule (MicroSeconds(5), &TdTcpTxSubflow::UnsetGuard, sub);
     // sub->m_nbytesSentLastRound = 0;
     // sub->m_activateTime = Simulator::Now();
     m_pacingTimer.Cancel();
-    m_pacingTimer.Schedule (sub->m_tcb->m_currentPacingRate.CalculateBytesTxTime (1));
+    // m_pacingTimer.Schedule (sub->m_tcb->m_currentPacingRate.CalculateBytesTxTime (1));
   }
   // m_pacingTimer.Cancel();
 
   NS_LOG_LOGIC ("Changed current subflow to " << (int)newsid);
 
-  m_sendPendingDataEvent = Simulator::ScheduleNow (&TdTcpSocketBase::SendPendingData,
+  m_sendPendingDataEvent = Simulator::Schedule (m_guardtime, &TdTcpSocketBase::SendPendingData,
                                                 this, m_connected);
+
+
+}
+
+void
+TdTcpSocketBase::ChangeActivateSubflowGuarded(uint8_t newsid, Time aftertime) 
+{
+  NS_LOG_FUNCTION (this << newsid << aftertime);
+
+  NS_ASSERT (newsid < m_tdNSubflows);
+
+  // if (m_currTxSubflow < m_txsubflows.size() && m_tcb->m_pacing) 
+  // {
+  //   auto sub = m_txsubflows[m_currTxSubflow];
+  //   sub->m_rateNextRound = 
+  //     sub->m_nbytesSentLastRound / (Simulator::Now() - sub->m_activateTime).GetSeconds() * 8;
+  // }
+
+  // m_currTxSubflow = newsid;
+  if (newsid < m_txsubflows.size()) 
+  {
+    auto sub = m_txsubflows[newsid];
+    Simulator::Schedule (aftertime - m_guardtime, &TdTcpTxSubflow::SetGuard, sub);
+    
+  }
+  // m_pacingTimer.Cancel();
+
+  NS_LOG_LOGIC ("Scheduled change subflow to " << (int)newsid << " after " << aftertime.GetSeconds());
+
+  Simulator::Schedule (aftertime, &TdTcpSocketBase::ChangeActivateSubflow, this, newsid);
 
 }
 

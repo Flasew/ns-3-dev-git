@@ -81,8 +81,10 @@ public:
   bool AddLooseMapping(SequenceNumber32 dsnHead, uint16_t length);
   SequenceNumber32 FirstUnmappedSSN();
   void EstimateRtt (const TcpHeader& tcpHeader, const SequenceNumber32 & ackNumber);
-  void UpdateAdaptivePacingRate (uint8_t fromsid);
+  // void UpdateAdaptivePacingRate (uint8_t fromsid);
   void UpdateAdaptivePacingRate(bool resetEnable);
+  void SetGuard();
+  void UnsetGuard();
 
   void UpdateCwnd (uint32_t oldValue, uint32_t newValue);
   void UpdateCongState (TcpSocketState::TcpCongState_t oldValue,
@@ -110,6 +112,7 @@ private:
   Time              m_lastAckDTime   {Seconds (0.0)};
 
   bool              m_paced   {false};
+  bool              m_guarded {false};
   uint64_t          m_maxPacedRate {0};
   int               m_pacingRatio {1};
 

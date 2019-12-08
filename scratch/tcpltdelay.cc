@@ -211,24 +211,25 @@ void CycleRate() {
     t = t + jit;
   }
 
+  auto next_rate = (curr_rate + 1) % bwt.size();
   for (auto & s: sockets) {
-    s->ChangeActivateSubflow((uint8_t)curr_rate);
+    s->ChangeActivateSubflowGuarded((uint8_t)next_rate, MicroSeconds(t));
   }
 
   Simulator::Schedule(MicroSeconds(t), CycleRate);
 }
 
-void QlTrace (std::string ctxt, uint32_t oldValue, uint32_t newValue)
-{
+// void QlTrace (std::string ctxt, uint32_t oldValue, uint32_t newValue)
+// {
 
-  if (qllog.is_open()) {
-    if (ctxt[10] == '2')
-      qllog << Simulator::Now().GetNanoSeconds() << ", 2, " << newValue << std::endl;
-    else if (ctxt[10] == '3')
-      qllog << Simulator::Now().GetNanoSeconds() << ", 3, " << newValue << std::endl;
-  }
+//   if (qllog.is_open()) {
+//     if (ctxt[10] == '2')
+//       qllog << Simulator::Now().GetNanoSeconds() << ", 2, " << newValue << std::endl;
+//     else if (ctxt[10] == '3')
+//       qllog << Simulator::Now().GetNanoSeconds() << ", 3, " << newValue << std::endl;
+//   }
 
-}
+// }
 
 // static void CwndTrace (std::string ctxt, uint32_t oldValue, uint32_t newValue)
 // {
@@ -259,6 +260,123 @@ void QlTrace (std::string ctxt, uint32_t oldValue, uint32_t newValue)
 //   }
 
 // }
+// 
+
+static bool 
+ProcessOptionTdTcpDSS (const Ptr<const TcpOption> & option,
+                    int16_t & ssid, 
+                    int16_t & scid, 
+                    uint32_t & sseq, 
+                    int16_t & asid, 
+                    int16_t & acid, 
+                    uint32_t & sack)
+{
+  if (!option)
+  {
+    NS_LOG_WARN ("ProcessOption TDDSS received null pointer");
+    return false;
+  }
+
+  Ptr<const TcpOptionTdTcpDSS> dss = DynamicCast<const TcpOptionTdTcpDSS>(option);
+  if (!dss)
+  {
+    NS_LOG_WARN ("ProcessOption TDDSS some nonsense");
+    return false;
+  }
+
+  if (dss->HasData()) 
+  {
+    ssid = dss->GetDataSubflow();
+    scid = dss->GetDataCarrier();
+    sseq = dss->GetDataSeq();
+  }
+  if (dss->HasAck()) 
+  {
+    asid = dss->GetAckSubflow();
+    acid = dss->GetAckCarrier();
+    sack = dss->GetAckNum();
+  }
+  if (ssid == -1 && asid == -1) 
+  {
+    return false;
+  }
+
+  return true;
+}
+
+static uint64_t bytesinqueue = 0;
+static void
+EnqueueTrace (Ptr<const ns3::QueueDiscItem> item)
+{
+  // std::cout << "here" << std::endl;
+  Ptr<Packet> p = item->GetPacket()->Copy();
+  // PppHeader ppp;
+  // p->RemoveHeader (ppp);
+  // p->Print(std::cout);
+  // Ipv4Header ip;
+  // p->RemoveHeader (ip);
+  TcpHeader tcp;
+  p->RemoveHeader (tcp);
+
+  int16_t ssid = -1, scid = -1, asid = -1, acid = -1;
+  uint32_t sseq, sack;
+  uint32_t packetSize = p->GetSize();
+  bytesinqueue += packetSize;
+
+  if (ProcessOptionTdTcpDSS(tcp.GetOption(TcpOption::TDTCP),
+                          ssid, scid, sseq, asid, acid, sack) )
+  {
+    if (ssid >= 0) 
+    {
+      if (qllog.is_open()) {
+        // if (ctxt[10] == '2')
+        qllog << Simulator::Now().GetNanoSeconds() << ", " << 
+                 bytesinqueue << ", " << 
+                 (int)ssid << ", " << 
+                 (int)scid << ", " <<
+                 curr_rate << std::endl;
+      }
+      // DeliverDataToSubflow((uint8_t)ssid, (uint8_t)scid, sseq, packet, tcpHeader);
+    }
+  }
+  // p = nullptr;
+
+}
+
+static void
+DequeueTrace (Ptr<const ns3::QueueDiscItem> item)
+{
+  Ptr<Packet> p = item->GetPacket()->Copy();
+  // PppHeader ppp;
+  // p->RemoveHeader (ppp);
+  // Ipv4Header ip;
+  // p->RemoveHeader (ip);
+  TcpHeader tcp;
+  p->RemoveHeader (tcp);
+
+  int16_t ssid = -1, scid = -1, asid = -1, acid = -1;
+  uint32_t sseq, sack;
+  uint32_t packetSize = p->GetSize();
+  bytesinqueue -= packetSize;
+
+  if (ProcessOptionTdTcpDSS(tcp.GetOption(TcpOption::TDTCP),
+                          ssid, scid, sseq, asid, acid, sack) )
+  {
+    if (ssid >= 0) 
+    {
+      if (qllog.is_open()) {
+        // if (ctxt[10] == '2')
+        qllog << Simulator::Now().GetNanoSeconds() << ", " << 
+                 bytesinqueue << ", " << 
+                 (int)ssid << ", " << 
+                 (int)scid << ", " <<
+                 curr_rate << std::endl;
+      }
+      // DeliverDataToSubflow((uint8_t)ssid, (uint8_t)scid, sseq, packet, tcpHeader);
+    }
+  }
+
+}
 
 static void
 TcpStateTrace (std::string ctxt, 
@@ -345,6 +463,8 @@ void ParseBWP(std::string & p)
     cmd.Parse(argc, argv);
 
     ParseBWP(bwt_str);
+
+    // Packet::EnablePrinting();
 
     std::random_device rd;
     gen = std::default_random_engine(rd());
@@ -592,13 +712,18 @@ void ParseBWP(std::string & p)
     sinkAppl.Start (Seconds (0.0));
   }
 
-  Config::Connect(
-    "/NodeList/2/$ns3::TrafficControlLayer/RootQueueDiscList/1/BytesInQueue",
-    MakeCallback (&QlTrace));
-  Config::Connect(
-    "/NodeList/3/$ns3::TrafficControlLayer/RootQueueDiscList/1/BytesInQueue",
-    MakeCallback (&QlTrace));
-
+  // Config::Connect(
+  //   "/NodeList/2/$ns3::TrafficControlLayer/RootQueueDiscList/1/BytesInQueue",
+  //   MakeCallback (&QlTrace));
+  // Config::Connect(
+  //   "/NodeList/3/$ns3::TrafficControlLayer/RootQueueDiscList/1/BytesInQueue",
+  //   MakeCallback (&QlTrace));
+  Config::ConnectWithoutContext(
+    "/NodeList/2/$ns3::TrafficControlLayer/RootQueueDiscList/1/Enqueue",
+    MakeCallback (&EnqueueTrace));
+  Config::ConnectWithoutContext(
+    "/NodeList/2/$ns3::TrafficControlLayer/RootQueueDiscList/1/Dequeue",
+    MakeCallback (&DequeueTrace));
   if (!nochange)
     Simulator::Schedule(MicroSeconds(1000000+bwt[0].period), CycleRate);
 
