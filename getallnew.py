@@ -1,7 +1,7 @@
 import os
 import json
 import xml.etree.ElementTree as ET
-import pandas as pd 
+import pandas as pd
 
 def getmeanrtt(root, dport):
     senderflows = set([f.attrib["flowId"] for f in root[1] if f.attrib["destinationPort"]==str(dport)])
@@ -40,7 +40,7 @@ with open(pdataname, "w") as pdata:
         pdata.write(str(qlen) + "\t")
         delay = 2*int(jdict["bwp"][0]["delay"][:-2])
         pdata.write(str(delay) + "\t")
-        fct = max([int(float(f.attrib["timeLastRxPacket"][:-2])/1000) for f in xroot[0]])
+        fct = max([int(float(f.attrib["timeLastTxPacket"][:-2])/1000) for f in xroot[0]])
         pdata.write(str(fct) + "\t")
         retransmits = getretrans(xroot, 2048)
         pdata.write(str(retransmits) + "\t")

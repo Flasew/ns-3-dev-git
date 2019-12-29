@@ -39,3 +39,5 @@ build-dir/
 build/
 /.cproject
 /.project
+
+.nfs*

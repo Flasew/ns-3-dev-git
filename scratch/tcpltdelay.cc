@@ -554,7 +554,7 @@ void ParseBWP(std::string & p)
   sp2p.SetDeviceAttribute("DataRate", DataRateValue(DataRate(bwt[0].bandwidth)));
   sp2p.SetDeviceAttribute("Mtu", UintegerValue(1514));
   sp2p.SetChannelAttribute("Delay", StringValue(bwt[0].delay_s));
-  sp2p.SetChannelType("PointToPointOrderedChannel");
+  sp2p.SetChannelType("PointToPointChannel");
   sp2p.SetQueue ("ns3::DropTailQueue", "MaxSize", StringValue ("1p"));
 
   TopoHelper::Connect(sp2p, 2, 3);

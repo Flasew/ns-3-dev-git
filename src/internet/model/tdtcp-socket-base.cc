@@ -982,6 +982,12 @@ TdTcpSocketBase::SendPendingData (bool withAck)
     subflow->m_paced = false;
     m_pacingTimer.Cancel();
   }
+  else 
+  {
+    NS_LOG_LOGIC("Enabling pacing due to big window");
+    subflow->m_paced = true;
+    // m_pacingTimer.Cancel();
+  }
 
   // RFC 6675, Section (C)
   // If cwnd - pipe >= 1 SMSS, the sender SHOULD transmit one or more
@@ -1016,6 +1022,17 @@ TdTcpSocketBase::SendPendingData (bool withAck)
         && m_state == TcpSocket::FIN_WAIT_1)
     {
       NS_LOG_INFO ("FIN_WAIT and OPEN state; no data to transmit");
+      break;
+    }
+
+    if (subflow->m_tcb->m_nextTxSequence != subflow->m_tcb->m_highTxMark)
+    {
+      NS_LOG_INFO ("Current active subflow has retransmit");
+      if (subflow->m_tcb->m_congState == TcpSocketState::CA_LOSS)
+      {
+        NS_LOG_INFO ("Subflow " << (int)m_currTxSubflow << " in loss state, calling retransmit");
+        subflow->DoRetransmit();
+      }
       break;
     }
     // (C.1) The scoreboard MUST be queried via NextSeg () for the
@@ -1057,12 +1074,6 @@ TdTcpSocketBase::SendPendingData (bool withAck)
         NS_LOG_DEBUG ("Invoking Nagle's algorithm for seq " << next <<
                       ", SFS: " << m_txBuffer->SizeFromSequence (next) <<
                       ". Wait to send.");
-        break;
-      }
-
-      if (subflow->m_tcb->m_nextTxSequence != subflow->m_tcb->m_highTxMark)
-      {
-        NS_LOG_DEBUG ("Current active subflow has retransmit, delaying new data");
         break;
       }
      
@@ -1283,7 +1294,8 @@ TdTcpSocketBase::ReTxTimeout ()
     --m_dataRetrCount;
   }
 
-  Ptr<TdTcpTxSubflow> subflow = m_txsubflows[m_currTxSubflow];
+  for (Ptr<TdTcpTxSubflow> subflow: m_txsubflows) {
+  // Ptr<TdTcpTxSubflow> subflow = m_txsubflows[m_currTxSubflow];
 
   uint32_t inFlightBeforeRto = subflow->BytesInFlight ();
   // bool resetSack = !m_sackEnabled; // Reset SACK information if SACK is not enabled.
@@ -1338,13 +1350,17 @@ TdTcpSocketBase::ReTxTimeout ()
                 subflow->m_tcb->m_ssThresh << ", restart from seqnum " <<
                 subflow->m_txBuffer->HeadSequence () << " doubled rto to " <<
                 subflow->m_rto.GetSeconds () << " s");
+  }
+
 
   // NS_ASSERT_MSG (subflow->BytesInFlight () == 0, "There are some bytes in flight after an RTO: " <<
   //                subflow->BytesInFlight ());
 
   // SendPendingData (m_connected);
   // IDK... this doesn't make sense but what does?
-  subflow->DoRetransmit();
+  // subflow->DoRetransmit();
+  m_seqXRetransmit.erase(m_seqXRetransmit.begin(), m_seqXRetransmit.end());
+  SendPendingData();
 
   // NS_ASSERT_MSG (subflow->BytesInFlight () <= subflow->m_tcb->m_segmentSize,
   //                "In flight (" << BytesInFlight () <<
@@ -1377,6 +1393,7 @@ TdTcpSocketBase::ChangeActivateSubflow(uint8_t newsid)
     // m_pacingTimer.Schedule (sub->m_tcb->m_currentPacingRate.CalculateBytesTxTime (1));
   }
   // m_pacingTimer.Cancel();
+  // m_seqToSubflowMap
 
   NS_LOG_LOGIC ("Changed current subflow to " << (int)newsid);
 
