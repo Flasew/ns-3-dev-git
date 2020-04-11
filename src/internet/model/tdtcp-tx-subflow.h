@@ -68,6 +68,7 @@ public:
   void EnterRecovery ();
   void DupAck ();
   void DoRetransmit ();
+  void RetransmitPacket ();
   void NewAck (SequenceNumber32 const& ack, bool resetRTO);
 
   uint32_t AvailableWindow () const;
