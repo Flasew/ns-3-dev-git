@@ -1,22 +1,19 @@
 #!/bin/bash
-c=31
+c=41
 sd=50000
 hdl="5us"
-dljump=5
-bwjump=1
-b=5500000000
+dljump=1
+bwjump=10
+b=10000000000
 #declare -a bwarr=(64 128 256 512 1024 2048 4096 8192 16384 32768 65536 131072 262144 524288 1048576)
-#declare -a bwarr=(64 128 256 512 1024 2048 4096 8192 16384 32768 65536 131072)
 declare -a bwarr=(64 90 128 181 256 362 512 724 1024 1448 2048 2896 4096 5792 8192 11585 16384 23170 32768 46340 65536 92681 131072 185363 262144 370727 524288 741455 1048576)
-#declare -a bwarr=(64 128 256 512 1024 2048 4096 8192 16384 32768 65536 131072 262144 524288 1048576)
-#declare -a bwarr=(131072 262144 524288 1048576)
-#declare -a flarr=(5 10)
 declare -a dlarr=(50000 100000 200000 500000 1000000 2000000)
+declare -a flarr=(1 5 10 20)
 declare -a qlarr=(50 100 200 400)
-#declare -a bwarr=(131072)
-declare -a flarr=(1 5 10)
-#declare -a dlarr=(500000)
-#declare -a qlarr=(200)
+#declare -a bwarr=(724)
+#declare -a flarr=(20)
+#declare -a dlarr=(50000)
+#declare -a qlarr=(50)
 for j in "${flarr[@]}"; do
   for i in "${bwarr[@]}"; do
     for q in "${qlarr[@]}"; do
