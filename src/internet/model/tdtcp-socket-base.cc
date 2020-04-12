@@ -1056,6 +1056,7 @@ TdTcpSocketBase::SendPendingData (bool withAck)
         int pkt_sz = existed_mapping->second.second.second; 
         Ptr<Packet> p = m_txBuffer->CopyFromSequence(pkt_sz, next);
         tx->DoRetransmit();
+        m_tcb->m_nextTxSequence = next;
         break;
       }
       // It's time to transmit, but before do silly window and Nagle's check
@@ -1357,16 +1358,16 @@ TdTcpSocketBase::ReTxTimeout ()
     subflow->m_congestionControl->CongestionStateSet (subflow->m_tcb, TcpSocketState::CA_LOSS);
     subflow->m_tcb->m_congState = TcpSocketState::CA_LOSS;
 
-    if (m_tcb->m_pacing)
-    {
-      m_pacingTimer.Cancel ();
-    }
 
     NS_LOG_DEBUG ("RTO. Reset cwnd to " <<  subflow->m_tcb->m_cWnd << ", ssthresh to " <<
                   subflow->m_tcb->m_ssThresh << ", restart from seqnum " <<
                   subflow->m_txBuffer->HeadSequence () << " doubled rto to " <<
                   subflow->m_rto.GetSeconds () << " s");
   }
+    if (m_tcb->m_pacing)
+    {
+      m_pacingTimer.Cancel ();
+    }
 
 
   // NS_ASSERT_MSG (subflow->BytesInFlight () == 0, "There are some bytes in flight after an RTO: " <<
