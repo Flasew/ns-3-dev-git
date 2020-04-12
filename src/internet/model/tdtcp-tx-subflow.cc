@@ -701,7 +701,7 @@ TdTcpTxSubflow::SendDataPacket (SequenceNumber32 seq,
     NS_FATAL_ERROR("Could not translate mapping associated to ssn");
   }
 
-  /*
+  
   if (m_meta->m_currTxSubflow != m_subflowid)
   {
     Ptr<TdTcpTxSubflow> carrier = m_meta->m_txsubflows[m_meta->m_currTxSubflow];
@@ -720,7 +720,7 @@ TdTcpTxSubflow::SendDataPacket (SequenceNumber32 seq,
     // NS_LOG_INFO ("Subflow " << (int)m_meta->m_currTxSubflow << " carried other info, transmit for other=" << carrier->m_transmitForOther);
     isRetransmission = true;
   }
-  */
+  
 
   // else 
   // {

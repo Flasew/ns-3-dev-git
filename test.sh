@@ -10,10 +10,10 @@ declare -a bwarr=(64 128 256 512 1024 2048 4096 8192 16384 32768 65536 131072 26
 #declare -a dlarr=(50000 100000 200000 500000 1000000 2000000)
 #declare -a flarr=(1 5 10 20)
 #declare -a qlarr=(50 100 200 400)
-#declare -a bwarr=(724)
-declare -a flarr=(10)
-declare -a dlarr=(50000 500000)
-declare -a qlarr=(50 100 200)
+declare -a bwarr=(724)
+declare -a flarr=(20)
+declare -a dlarr=(50000)
+declare -a qlarr=(50)
 for j in "${flarr[@]}"; do
   for i in "${bwarr[@]}"; do
     for q in "${qlarr[@]}"; do
@@ -34,7 +34,7 @@ for j in "${flarr[@]}"; do
         #  dack=3
         #fi
         dack=3
-        ./waf --run "scratch/tcpltdelay --HostPropDelay=$hdl --Bidir=false --HostRate=40000000000 --MaxBytes=400000000 --Nsd=$sd --QueueLength=$q --RWND=20000000 --NFlows=$j --Rjitter=10000 --DupAckTh=${dack} --BWP=${bh},${dh}ns,$i,${bl},${dl}ns,$i"  &
+        ./waf --run "scratch/tcpltdelay --HostPropDelay=$hdl --Bidir=false --HostRate=40000000000 --MaxBytes=10000000 --Nsd=$sd --QueueLength=$q --RWND=20000000 --NFlows=$j --Rjitter=10000 --DupAckTh=${dack} --BWP=${bh},${dh}ns,$i,${bl},${dl}ns,$i"  &
         sleep 10
       done
     done

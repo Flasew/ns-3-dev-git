@@ -1037,16 +1037,6 @@ TdTcpSocketBase::SendPendingData (bool withAck)
       break;
     }
 
-    if (subflow->m_tcb->m_nextTxSequence != subflow->m_tcb->m_highTxMark)
-    {
-      NS_LOG_INFO ("Current active subflow has retransmit");
-      if (subflow->m_tcb->m_congState == TcpSocketState::CA_LOSS)
-      {
-        NS_LOG_INFO ("Subflow " << (int)m_currTxSubflow << " in loss state, calling retransmit");
-        subflow->DoRetransmit();
-      }
-      break;
-    }
     // (C.1) The scoreboard MUST be queried via NextSeg () for the
     //       sequence number range of the next segment to transmit (if
     //       any), and the given segment sent.  If NextSeg () returns
@@ -1076,15 +1066,26 @@ TdTcpSocketBase::SendPendingData (bool withAck)
           // tx->UpdateAdaptivePacingRate(false);
           break;
         }
-        tx->m_tcb->m_nextTxSequence = existed_mapping->second.second.first;
-        int pkt_sz = existed_mapping->second.second.second; 
-        Ptr<Packet> p = m_txBuffer->CopyFromSequence(pkt_sz, next);
-        NS_LOG_INFO("Transmitting a transmitted packet: DSN=" << next << " SSN=(" << (int)tx->m_subflowid << ", " << existed_mapping->second.second.first << ")");
-        // tx->DoRetransmit();
-        tx->SendDataPacket (tx->m_tcb->m_nextTxSequence, pkt_sz, true);
+        // tx->m_tcb->m_nextTxSequence = existed_mapping->second.second.first;
+        // int pkt_sz = existed_mapping->second.second.second; 
+        // Ptr<Packet> p = m_txBuffer->CopyFromSequence(pkt_sz, next);
+        // NS_LOG_INFO("Transmitting a transmitted packet: DSN=" << next << " SSN=(" << (int)tx->m_subflowid << ", " << existed_mapping->second.second.first << ")");
+        tx->DoRetransmit();
+        // tx->SendDataPacket (tx->m_tcb->m_nextTxSequence, pkt_sz, true);
         // tx->m_tcb->m_nextTxSequence += pkt_sz;
         break;
       }
+
+    if (subflow->m_tcb->m_nextTxSequence != subflow->m_tcb->m_highTxMark)
+    {
+      NS_LOG_INFO ("Current active subflow has retransmit");
+      if (subflow->m_tcb->m_congState != TcpSocketState::CA_LOSS)
+      {
+        NS_LOG_INFO ("Subflow " << (int)m_currTxSubflow << " in loss state, calling retransmit");
+        subflow->DoRetransmit();
+      }
+      break;
+    }
 
       // It's time to transmit, but before do silly window and Nagle's check
       uint32_t availableData = m_txBuffer->SizeFromSequence (next);

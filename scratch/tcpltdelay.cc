@@ -619,6 +619,7 @@ void ParseBWP(std::string & p)
     // sb->SetRecoveryAlgorithm(rec);
     sb->SetRetxThresh(dupackth);
     sb->SetFlowId((int)i);
+    sb->SetMinRto(MicroSeconds(1000));
     // sb->SetMaxPacingRate(0, DataRate("10Gbps"));
     // sb->SetMaxPacingRate(1, DataRate("1Gbps"));
     // sb->SetPacingRatio(0, 10);
