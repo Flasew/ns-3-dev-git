@@ -1051,9 +1051,9 @@ TdTcpSocketBase::SendPendingData (bool withAck)
     {
       auto existed_mapping = m_seqToSubflowMap.find(next);
       if (existed_mapping != m_seqToSubflowMap.end()) {
-        auto tx = existed_mapping->first;
-        tx->m_nextTxSequence = existed_mapping->second.first;
-        int pkt_sz = existed_mapping->second.second; 
+        auto tx = existed_mapping->second.first;
+        tx->m_tcb->m_nextTxSequence = existed_mapping->second.second.first;
+        int pkt_sz = existed_mapping->second.second.second; 
         Ptr<Packet> p = m_txBuffer->CopyFromSequence(pkt_sz, next);
         tx->RetransmitPacket();
         break;
@@ -1127,7 +1127,7 @@ TdTcpSocketBase::SendPendingData (bool withAck)
       ok = subflow->m_txBuffer->Add (p);
       NS_ASSERT(ok);
 
-      m_seqToSubflowMap[dsnHead] = std::make_pair(subflow, std::make_pair(subflow->m_tcb->m_nextTxSequence, sz));
+      m_seqToSubflowMap[dsnHead] = std::make_pair(subflow, std::make_pair(subflow->m_tcb->m_nextTxSequence, length));
       // m_seqXRetransmit.insert({dsnHead, {subflow, length}});
       
       uint32_t sz = subflow->SendDataPacket (subflow->m_tcb->m_nextTxSequence, length, withAck);
@@ -1308,7 +1308,7 @@ TdTcpSocketBase::ReTxTimeout ()
   {
     m_txBuffer->ResetRenoSack ();
   }
-  m_txBuffer->SetSentListLost (resetSack);
+  m_txBuffer->SetSentListLost (true);
 
   for (Ptr<TdTcpTxSubflow> subflow: m_txsubflows) {
   // Ptr<TdTcpTxSubflow> subflow = m_txsubflows[m_currTxSubflow];
