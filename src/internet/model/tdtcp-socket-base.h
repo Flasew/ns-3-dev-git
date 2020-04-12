@@ -383,7 +383,8 @@ private:
 
   Time m_guardtime {MicroSeconds(8)};
 
-  std::map<SequenceNumber32, Ptr<TdTcpTxSubflow>> m_seqToSubflowMap;
+  std::map<SequenceNumber32, 
+    std::pair<Ptr<TdTcpTxSubflow>, std::pair<SequenceNumber32, int>>> m_seqToSubflowMap;
   std::multimap<SequenceNumber32, 
     std::pair<Ptr<TdTcpTxSubflow>, int>> m_seqXRetransmit;
 

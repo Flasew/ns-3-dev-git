@@ -128,8 +128,8 @@ TdTcpTxSubflow::ReceivedAck(uint8_t acid, Ptr<Packet> p, const TcpHeader& tcpHea
   //   Ptr<TdTcpTxSubflow> carrier = m_meta->m_txsubflows[acid];
   // }
 
-  m_txBuffer->DiscardUpTo (ackNumber);
-  m_TxMappings.DiscardUpTo (ackNumber);
+  // m_txBuffer->DiscardUpTo (ackNumber);
+  // m_TxMappings.DiscardUpTo (ackNumber);
 
   if (SequenceNumber32(sack) > m_highRxAckMark)
   {
@@ -592,7 +592,7 @@ TdTcpTxSubflow::DoRetransmit ()
     seq = m_txBuffer->HeadSequence ();
   }
   //NS_ASSERT (m_sackEnabled || seq == m_txBuffer->HeadSequence ());
-  NS_ASSERT (seq == m_txBuffer->HeadSequence ());
+  // NS_ASSERT (seq == m_txBuffer->HeadSequence ());
   NS_LOG_INFO ("Retransmitting " << seq);
 
   // Update the trace and retransmit the segment

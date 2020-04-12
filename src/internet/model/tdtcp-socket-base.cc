@@ -844,6 +844,12 @@ TdTcpSocketBase::ReceivedAck (Ptr<Packet> packet, const TcpHeader& tcpHeader)
   NS_LOG_FUNCTION("Received DACK");
 
   SequenceNumber32  dack = tcpHeader.GetAckNumber();
+
+  for (auto it = m_seqToSubflowMap.begin(); it != m_seqToSubflowMap.end() && it->first < dack; it++) {
+    it->second.first->m_txBuffer->DiscardUpTo (it->second.second.first);
+    it->second.first->m_TxMappings.DiscardUpTo (it->second.second.first);
+  }
+
   if (dack < m_txBuffer->HeadSequence ())
   { // Case 1: Old ACK, ignored.
     NS_LOG_LOGIC ("Old ack Ignored " << dack  );
@@ -860,10 +866,12 @@ TdTcpSocketBase::ReceivedAck (Ptr<Packet> packet, const TcpHeader& tcpHeader)
     if (m_dupAckCount > m_connDupAckTh) 
     {
       Ptr<TdTcpTxSubflow> tx;
-      if ((tx = m_seqToSubflowMap[dack]))
+      if ((tx = m_seqToSubflowMap[dack].first))
       {
         NS_LOG_INFO ("Connection level retransmit");
-        tx->DoRetransmit();
+        // tx->m_congestionControl->CongestionStateSet (tx->m_tcb, TcpSocketState::CA_RECOVERY);
+        if (tx->m_tcb->m_congState < TcpSocketState::CA_RECOVERY)
+          tx->EnterRecovery ();
         m_dupAckCount = 0;
       }
       else 
@@ -877,11 +885,15 @@ TdTcpSocketBase::ReceivedAck (Ptr<Packet> packet, const TcpHeader& tcpHeader)
   { // Case 3: New ACK, reset m_dupAckCount and update m_txBuffer
     NS_LOG_LOGIC ("New DataAck [" << dack  << "]");
     m_txBuffer->DiscardUpTo( dack );
+
+
     m_seqToSubflowMap.erase(m_seqToSubflowMap.begin(), m_seqToSubflowMap.lower_bound(dack));
     m_seqXRetransmit.erase(m_seqXRetransmit.begin(), m_seqXRetransmit.lower_bound(dack));
 
     NS_LOG_INFO ("m_seqToSubflowMap size: " << m_seqToSubflowMap.size() << 
                  "; m_seqXRetransmit size: " << m_seqXRetransmit.size());
+
+
     // auto ub = m_seqXRetransmit.upper_bound(dack);
     // for (auto it = m_seqXRetransmit.begin(); it != ub; it++)
     // {
@@ -999,7 +1011,7 @@ TdTcpSocketBase::SendPendingData (bool withAck)
     if (subflow->m_paced && m_tcb->m_pacing)
     {
       NS_LOG_INFO ("Pacing is enabled");
-      // subflow->UpdateAdaptivePacingRate (false);
+      subflow->UpdateAdaptivePacingRate (false);
       if (m_pacingTimer.IsRunning ())
       {
         NS_LOG_INFO ("Skipping Packet due to pacing" << m_pacingTimer.GetDelayLeft ());
@@ -1049,6 +1061,31 @@ TdTcpSocketBase::SendPendingData (bool withAck)
     }
     else
     {
+
+      if (m_tcb->m_nextTxSequence != next)
+      {
+        m_tcb->m_nextTxSequence = next;
+      }
+
+      auto existed_mapping = m_seqToSubflowMap.find(next);
+      if (existed_mapping != m_seqToSubflowMap.end() || next != m_tcb->m_highTxMark) {
+        NS_LOG_INFO("Existed DSN - Retransmit.");
+        // std::cerr << "Existed DSN - Retransmit." <<std::endl;
+        auto tx = existed_mapping->second.first;
+        if (m_pacingTimer.IsRunning ()) {
+          // tx->UpdateAdaptivePacingRate(false);
+          break;
+        }
+        tx->m_tcb->m_nextTxSequence = existed_mapping->second.second.first;
+        int pkt_sz = existed_mapping->second.second.second; 
+        Ptr<Packet> p = m_txBuffer->CopyFromSequence(pkt_sz, next);
+        NS_LOG_INFO("Transmitting a transmitted packet: DSN=" << next << " SSN=(" << (int)tx->m_subflowid << ", " << existed_mapping->second.second.first << ")");
+        // tx->DoRetransmit();
+        tx->SendDataPacket (tx->m_tcb->m_nextTxSequence, pkt_sz, true);
+        // tx->m_tcb->m_nextTxSequence += pkt_sz;
+        break;
+      }
+
       // It's time to transmit, but before do silly window and Nagle's check
       uint32_t availableData = m_txBuffer->SizeFromSequence (next);
 
@@ -1092,10 +1129,7 @@ TdTcpSocketBase::SendPendingData (bool withAck)
       //       previously unsent data.
       //
       // These steps are done in m_txBuffer with the tags.
-      if (m_tcb->m_nextTxSequence != next)
-      {
-        m_tcb->m_nextTxSequence = next;
-      }
+
       if (subflow->m_tcb->m_bytesInFlight.Get () == 0)
       {
         subflow->m_congestionControl->CwndEvent (subflow->m_tcb, TcpSocketState::CA_EVENT_TX_START);
@@ -1118,7 +1152,7 @@ TdTcpSocketBase::SendPendingData (bool withAck)
       ok = subflow->m_txBuffer->Add (p);
       NS_ASSERT(ok);
 
-      m_seqToSubflowMap[dsnHead] = subflow;
+      m_seqToSubflowMap[dsnHead] = std::make_pair(subflow, std::make_pair(subflow->m_tcb->m_nextTxSequence, length));
       // m_seqXRetransmit.insert({dsnHead, {subflow, length}});
       
       uint32_t sz = subflow->SendDataPacket (subflow->m_tcb->m_nextTxSequence, length, withAck);
@@ -1245,6 +1279,8 @@ TdTcpSocketBase::ReTxTimeout ()
 {
   NS_LOG_FUNCTION (this);
   NS_LOG_LOGIC (this << " ReTxTimeout Expired at time " << Simulator::Now ().GetSeconds ());
+  NS_LOG_INFO("Flow " << m_flowid << " timeout.");// << std::endl;
+  // std::cerr << "Flow " << m_flowid << " timeout." << std::endl;
   // If erroneous timeout in closed/timed-wait state, just return
   if (m_state == CLOSED || m_state == TIME_WAIT)
   {
@@ -1285,6 +1321,7 @@ TdTcpSocketBase::ReTxTimeout ()
   if (m_dataRetrCount == 0)
   {
     NS_LOG_INFO ("No more data retries available. Dropping connection");
+    // std::cerr << "Flow " << m_flowid << " giveup." << std::endl;
     NotifyErrorClose ();
     DeallocateEndPoint ();
     return;
@@ -1294,64 +1331,72 @@ TdTcpSocketBase::ReTxTimeout ()
     --m_dataRetrCount;
   }
 
-  for (Ptr<TdTcpTxSubflow> subflow: m_txsubflows) {
-  // Ptr<TdTcpTxSubflow> subflow = m_txsubflows[m_currTxSubflow];
-
-  uint32_t inFlightBeforeRto = subflow->BytesInFlight ();
-  // bool resetSack = !m_sackEnabled; // Reset SACK information if SACK is not enabled.
-  //                                  // The information in the TcpTxBuffer is guessed, in this case.
-
-  // Reset dupAckCount
-  subflow->m_dupAckCount = 0;
-  // if (!m_sackEnabled)
-  // {
-  subflow->m_txBuffer->ResetRenoSack ();
-  // }
-
-  subflow->m_txBuffer->SetSentListLost (true);
-
-  // From RFC 6675, Section 5.1
-  // If an RTO occurs during loss recovery as specified in this document,
-  // RecoveryPoint MUST be set to HighData.  Further, the new value of
-  // RecoveryPoint MUST be preserved and the loss recovery algorithm
-  // outlined in this document MUST be terminated.
-  subflow->m_recover = subflow->m_tcb->m_highTxMark;
-
-  // RFC 6298, clause 2.5, double the timer
-  Time doubledRto = subflow->m_rto + subflow->m_rto;
-  subflow->m_rto = Min (doubledRto, Time::FromDouble (60,  Time::S));
-
-  // Empty RTT history
-  subflow->m_history.clear ();
-
-  // Please don't reset highTxMark, it is used for retransmission detection
-
-  // When a TCP sender detects segment loss using the retransmission timer
-  // and the given segment has not yet been resent by way of the
-  // retransmission timer, decrease ssThresh
-  if (subflow->m_tcb->m_congState != TcpSocketState::CA_LOSS || !subflow->m_txBuffer->IsHeadRetransmitted ())
+  m_dupAckCount = 0;
+  if (!m_sackEnabled)
   {
-    subflow->m_tcb->m_ssThresh = subflow->m_congestionControl->GetSsThresh (subflow->m_tcb, inFlightBeforeRto);
+    m_txBuffer->ResetRenoSack ();
   }
+  m_txBuffer->SetSentListLost (true);
 
-  // Cwnd set to 1 MSS
-  subflow->m_tcb->m_cWnd = subflow->m_tcb->m_segmentSize;
-  subflow->m_tcb->m_cWndInfl = subflow->m_tcb->m_cWnd;
-  subflow->m_congestionControl->CwndEvent (subflow->m_tcb, TcpSocketState::CA_EVENT_LOSS);
-  subflow->m_congestionControl->CongestionStateSet (subflow->m_tcb, TcpSocketState::CA_LOSS);
-  subflow->m_tcb->m_congState = TcpSocketState::CA_LOSS;
+  for (Ptr<TdTcpTxSubflow> subflow: m_txsubflows) {
+    // Ptr<TdTcpTxSubflow> subflow = m_txsubflows[m_currTxSubflow];
+
+    uint32_t inFlightBeforeRto = subflow->BytesInFlight ();
+    // bool resetSack = !m_sackEnabled; // Reset SACK information if SACK is not enabled.
+    //                                  // The information in the TcpTxBuffer is guessed, in this case.
+
+    // Reset dupAckCount
+    subflow->m_dupAckCount = 0;
+    // if (!m_sackEnabled)
+    // {
+    subflow->m_txBuffer->ResetRenoSack ();
+    // }
+
+    subflow->m_txBuffer->SetSentListLost (true);
+
+    // From RFC 6675, Section 5.1
+    // If an RTO occurs during loss recovery as specified in this document,
+    // RecoveryPoint MUST be set to HighData.  Further, the new value of
+    // RecoveryPoint MUST be preserved and the loss recovery algorithm
+    // outlined in this document MUST be terminated.
+    subflow->m_recover = subflow->m_tcb->m_highTxMark;
+
+    // RFC 6298, clause 2.5, double the timer
+    Time doubledRto = subflow->m_rto + subflow->m_rto;
+    subflow->m_rto = Min (doubledRto, Time::FromDouble (60,  Time::S));
+
+    // Empty RTT history
+    subflow->m_history.clear ();
+
+    // Please don't reset highTxMark, it is used for retransmission detection
+
+    // When a TCP sender detects segment loss using the retransmission timer
+    // and the given segment has not yet been resent by way of the
+    // retransmission timer, decrease ssThresh
+    if (subflow->m_tcb->m_congState != TcpSocketState::CA_LOSS || !subflow->m_txBuffer->IsHeadRetransmitted ())
+    {
+      subflow->m_tcb->m_ssThresh = subflow->m_congestionControl->GetSsThresh (subflow->m_tcb, inFlightBeforeRto);
+    }
+
+    // Cwnd set to 1 MSS
+    subflow->m_tcb->m_cWnd = subflow->m_tcb->m_segmentSize;
+    subflow->m_tcb->m_cWndInfl = subflow->m_tcb->m_cWnd;
+    subflow->m_congestionControl->CwndEvent (subflow->m_tcb, TcpSocketState::CA_EVENT_LOSS);
+    subflow->m_congestionControl->CongestionStateSet (subflow->m_tcb, TcpSocketState::CA_LOSS);
+    subflow->m_tcb->m_congState = TcpSocketState::CA_LOSS;
+
+
+
+    NS_LOG_DEBUG ("RTO. Reset cwnd to " <<  subflow->m_tcb->m_cWnd << ", ssthresh to " <<
+                  subflow->m_tcb->m_ssThresh << ", restart from seqnum " <<
+                  subflow->m_txBuffer->HeadSequence () << " doubled rto to " <<
+                  subflow->m_rto.GetSeconds () << " s");
+  }
 
   if (m_tcb->m_pacing)
   {
     m_pacingTimer.Cancel ();
   }
-
-  NS_LOG_DEBUG ("RTO. Reset cwnd to " <<  subflow->m_tcb->m_cWnd << ", ssthresh to " <<
-                subflow->m_tcb->m_ssThresh << ", restart from seqnum " <<
-                subflow->m_txBuffer->HeadSequence () << " doubled rto to " <<
-                subflow->m_rto.GetSeconds () << " s");
-  }
-
 
   // NS_ASSERT_MSG (subflow->BytesInFlight () == 0, "There are some bytes in flight after an RTO: " <<
   //                subflow->BytesInFlight ());
@@ -1360,7 +1405,7 @@ TdTcpSocketBase::ReTxTimeout ()
   // IDK... this doesn't make sense but what does?
   // subflow->DoRetransmit();
   m_seqXRetransmit.erase(m_seqXRetransmit.begin(), m_seqXRetransmit.end());
-  SendPendingData();
+  SendPendingData(m_connected);
 
   // NS_ASSERT_MSG (subflow->BytesInFlight () <= subflow->m_tcb->m_segmentSize,
   //                "In flight (" << BytesInFlight () <<
