@@ -996,6 +996,7 @@ TdTcpSocketBase::SendPendingData (bool withAck)
   // else branch to control silly window syndrome and Nagle)
   while (availableWindow > 0)
   {
+    subflow = m_txsubflows[m_currTxSubflow];
     if (subflow->m_paced && m_tcb->m_pacing)
     {
       NS_LOG_INFO ("Pacing is enabled");
@@ -1050,15 +1051,14 @@ TdTcpSocketBase::SendPendingData (bool withAck)
     else
     {
       auto existed_mapping = m_seqToSubflowMap.find(next);
-      if (existed_mapping != m_seqToSubflowMap.end()) {
-        auto tx = existed_mapping->second.first;
-        tx->m_tcb->m_nextTxSequence = existed_mapping->second.second.first;
-        int pkt_sz = existed_mapping->second.second.second; 
-        Ptr<Packet> p = m_txBuffer->CopyFromSequence(pkt_sz, next);
-        tx->DoRetransmit();
-        m_tcb->m_nextTxSequence = next;
-        break;
-      }
+      // if (existed_mapping != m_seqToSubflowMap.end()) {
+      //   auto tx = existed_mapping->second.first;
+      //   tx->m_tcb->m_nextTxSequence = existed_mapping->second.second.first;
+      //   int pkt_sz = existed_mapping->second.second.second; 
+      //   Ptr<Packet> p = m_txBuffer->CopyFromSequence(pkt_sz, next);
+      //   tx->DoRetransmit();
+      //   break;
+      // }
       // It's time to transmit, but before do silly window and Nagle's check
       uint32_t availableData = m_txBuffer->SizeFromSequence (next);
 
@@ -1086,12 +1086,6 @@ TdTcpSocketBase::SendPendingData (bool withAck)
                       ". Wait to send.");
         break;
       }
-     
-      uint32_t s = std::min (availableWindow, subflow->m_tcb->m_segmentSize);
-
-      SequenceNumber32 dsnHead = m_tcb->m_nextTxSequence;
-      Ptr<Packet> p = m_txBuffer->CopyFromSequence(s, dsnHead);
-      uint16_t length = p->GetSize();
 
       // (C.2) If any of the data octets sent in (C.1) are below HighData,
       //       HighRxt MUST be set to the highest sequence number of the
@@ -1105,30 +1099,48 @@ TdTcpSocketBase::SendPendingData (bool withAck)
       if (m_tcb->m_nextTxSequence != next)
       {
         m_tcb->m_nextTxSequence = next;
-      }
+      }      
+
+      uint32_t s = std::min (availableWindow, subflow->m_tcb->m_segmentSize);
+
+      SequenceNumber32 dsnHead = m_tcb->m_nextTxSequence;
+      Ptr<Packet> p = m_txBuffer->CopyFromSequence(s, dsnHead);
+      uint16_t length = p->GetSize();
+
       if (subflow->m_tcb->m_bytesInFlight.Get () == 0)
       {
         subflow->m_congestionControl->CwndEvent (subflow->m_tcb, TcpSocketState::CA_EVENT_TX_START);
       }
 
-      
-      // For now we limit the mapping to a per packet basis
-      // SequenceNumber32 outssn;
-      bool ok = subflow->AddLooseMapping(dsnHead, length);
-      NS_ASSERT(ok);
+      bool ok;
+      SequenceNumber32 dsnTail;
+      if (existed_mapping == m_seqToSubflowMap.end()) {
+        
+        // For now we limit the mapping to a per packet basis
+        // SequenceNumber32 outssn;
+        ok = subflow->AddLooseMapping(dsnHead, length);
+        NS_ASSERT(ok);
 
-      // see next #if 0 to see how it should be
-      SequenceNumber32 dsnTail = dsnHead + length;
-      
-      // NS_ASSERT(p->GetSize() == length);
-      // int ret = subflow->Send(p, 0);
+        // see next #if 0 to see how it should be
+        dsnTail = dsnHead + length;
+        
+        // NS_ASSERT(p->GetSize() == length);
+        // int ret = subflow->Send(p, 0);
 
-      // By making sure each subflow's txbuffer is at most as big as meta's tx buffer
-      // we can guarantee that this will not overflow.
-      ok = subflow->m_txBuffer->Add (p);
-      NS_ASSERT(ok);
+        // By making sure each subflow's txbuffer is at most as big as meta's tx buffer
+        // we can guarantee that this will not overflow.
+        ok = subflow->m_txBuffer->Add (p);
+        NS_ASSERT(ok);
 
-      m_seqToSubflowMap[dsnHead] = std::make_pair(subflow, std::make_pair(subflow->m_tcb->m_nextTxSequence, length));
+        m_seqToSubflowMap[dsnHead] = std::make_pair(subflow, std::make_pair(subflow->m_tcb->m_nextTxSequence, length));
+      }
+
+      else {
+        subflow = existed_mapping->second.first;
+        subflow->m_tcb->m_nextTxSequence = existed_mapping->second.second.first;
+        subflow->DoRetransmit();
+        break;
+      }
       // m_seqXRetransmit.insert({dsnHead, {subflow, length}});
       
       uint32_t sz = subflow->SendDataPacket (subflow->m_tcb->m_nextTxSequence, length, withAck);
