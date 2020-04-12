@@ -613,7 +613,7 @@ TdTcpTxSubflow::RetransmitPacket ()
     SendDataPacket (m_tcb->m_nextTxSequence, m_tcb->m_segmentSize, true);
 
   NS_ASSERT (sz > 0);
-  mtcb->m_nextTxSequence += sz;
+  m_tcb->m_nextTxSequence += sz;
 }
 
 void
