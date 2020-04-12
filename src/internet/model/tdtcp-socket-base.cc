@@ -1055,7 +1055,7 @@ TdTcpSocketBase::SendPendingData (bool withAck)
         tx->m_nextTxSequence = existed_mapping->second.first;
         int pkt_sz = existed_mapping->second.second; 
         Ptr<Packet> p = m_txBuffer->CopyFromSequence(pkt_sz, next);
-        tx->RetransmitPacket();
+        tx->DoRetransmit();
         break;
       }
       // It's time to transmit, but before do silly window and Nagle's check
