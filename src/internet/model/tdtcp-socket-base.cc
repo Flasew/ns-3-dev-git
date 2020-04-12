@@ -877,8 +877,8 @@ TdTcpSocketBase::ReceivedAck (Ptr<Packet> packet, const TcpHeader& tcpHeader)
   { // Case 3: New ACK, reset m_dupAckCount and update m_txBuffer
     NS_LOG_LOGIC ("New DataAck [" << dack  << "]");
     m_txBuffer->DiscardUpTo( dack );
-    m_seqToSubflowMap.erase(m_seqToSubflowMap.begin(), m_seqToSubflowMap.lower_bound(dack));
-    m_seqXRetransmit.erase(m_seqXRetransmit.begin(), m_seqXRetransmit.lower_bound(dack));
+    m_seqToSubflowMap.erase(m_seqToSubflowMap.begin(), m_seqToSubflowMap.lower_bound(dack - 1));
+    m_seqXRetransmit.erase(m_seqXRetransmit.begin(), m_seqXRetransmit.lower_bound(dack - 1));
 
     NS_LOG_INFO ("m_seqToSubflowMap size: " << m_seqToSubflowMap.size() << 
                  "; m_seqXRetransmit size: " << m_seqXRetransmit.size());

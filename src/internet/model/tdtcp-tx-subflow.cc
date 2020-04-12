@@ -128,10 +128,12 @@ TdTcpTxSubflow::ReceivedAck(uint8_t acid, Ptr<Packet> p, const TcpHeader& tcpHea
   //   Ptr<TdTcpTxSubflow> carrier = m_meta->m_txsubflows[acid];
   // }
 
+  /*
   if (tcpHeader.GetAckNumber() > m_meta->m_highRxAckMark) {
     m_txBuffer->DiscardUpTo (ackNumber);
     m_TxMappings.DiscardUpTo (ackNumber);
   }
+  */
 
   if (SequenceNumber32(sack) > m_highRxAckMark)
   {
@@ -615,7 +617,7 @@ TdTcpTxSubflow::RetransmitPacket ()
     SendDataPacket (m_tcb->m_nextTxSequence, m_tcb->m_segmentSize, true);
 
   NS_ASSERT (sz > 0);
-  mtcb->m_nextTxSequence += sz;
+  m_tcb->m_nextTxSequence += sz;
 }
 
 void
