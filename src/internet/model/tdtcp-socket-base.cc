@@ -1051,14 +1051,16 @@ TdTcpSocketBase::SendPendingData (bool withAck)
     else
     {
       auto existed_mapping = m_seqToSubflowMap.find(next);
-      // if (existed_mapping != m_seqToSubflowMap.end()) {
-      //   auto tx = existed_mapping->second.first;
-      //   tx->m_tcb->m_nextTxSequence = existed_mapping->second.second.first;
-      //   int pkt_sz = existed_mapping->second.second.second; 
-      //   Ptr<Packet> p = m_txBuffer->CopyFromSequence(pkt_sz, next);
-      //   tx->DoRetransmit();
-      //   break;
-      // }
+      if (existed_mapping != m_seqToSubflowMap.end()) {
+        auto tx = existed_mapping->second.first;
+        tx->m_tcb->m_nextTxSequence = existed_mapping->second.second.first;
+        int pkt_sz = existed_mapping->second.second.second; 
+        Ptr<Packet> p = m_txBuffer->CopyFromSequence(pkt_sz, next);
+        std::cerr << "Transmitting a transmitted packet: DSN=" << next << " SSN=(" << (int)tx->m_subflowid << ", " << existed_mapping->second.second.first << ")" << std::endl;
+        tx->DoRetransmit();
+        break;
+      }
+
       // It's time to transmit, but before do silly window and Nagle's check
       uint32_t availableData = m_txBuffer->SizeFromSequence (next);
 
@@ -1114,7 +1116,7 @@ TdTcpSocketBase::SendPendingData (bool withAck)
 
       bool ok;
       SequenceNumber32 dsnTail;
-      if (existed_mapping == m_seqToSubflowMap.end()) {
+      // if (existed_mapping == m_seqToSubflowMap.end()) {
         
         // For now we limit the mapping to a per packet basis
         // SequenceNumber32 outssn;
@@ -1133,14 +1135,11 @@ TdTcpSocketBase::SendPendingData (bool withAck)
         NS_ASSERT(ok);
 
         m_seqToSubflowMap[dsnHead] = std::make_pair(subflow, std::make_pair(subflow->m_tcb->m_nextTxSequence, length));
-      }
+      // }
 
-      else {
-        subflow = existed_mapping->second.first;
-        subflow->m_tcb->m_nextTxSequence = existed_mapping->second.second.first;
-        subflow->DoRetransmit();
-        break;
-      }
+      // else {
+        
+      // }
       // m_seqXRetransmit.insert({dsnHead, {subflow, length}});
       
       uint32_t sz = subflow->SendDataPacket (subflow->m_tcb->m_nextTxSequence, length, withAck);
