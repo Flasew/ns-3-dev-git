@@ -1081,6 +1081,8 @@ TdTcpSocketBase::SendPendingData (bool withAck)
         // Ptr<Packet> p = m_txBuffer->CopyFromSequence(pkt_sz, next);
         // NS_LOG_INFO("Transmitting a transmitted packet: DSN=" << next << " SSN=(" << (int)tx->m_subflowid << ", " << existed_mapping->second.second.first << ")");
         tx->DoRetransmit();
+        m_sendPendingDataEvent = Simulator::Schedule (MicroSeconds(1), &TdTcpSocketBase::SendPendingData,
+                                                this, m_connected);
         // tx->SendDataPacket (tx->m_tcb->m_nextTxSequence, pkt_sz, true);
         // tx->m_tcb->m_nextTxSequence += pkt_sz;
         break;
