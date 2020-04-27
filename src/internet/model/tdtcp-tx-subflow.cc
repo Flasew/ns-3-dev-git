@@ -130,10 +130,11 @@ TdTcpTxSubflow::ReceivedAck(uint8_t acid, Ptr<Packet> p, const TcpHeader& tcpHea
 
   /*
   if (tcpHeader.GetAckNumber() > m_meta->m_highRxAckMark) {
-    m_txBuffer->DiscardUpTo (ackNumber);
-    m_TxMappings.DiscardUpTo (ackNumber);
+    
   }
   */
+  m_txBuffer->DiscardUpTo (ackNumber);
+  m_TxMappings.DiscardUpTo (ackNumber);
 
   if (SequenceNumber32(sack) > m_highRxAckMark)
   {
@@ -142,7 +143,7 @@ TdTcpTxSubflow::ReceivedAck(uint8_t acid, Ptr<Packet> p, const TcpHeader& tcpHea
 
   // if (m_meta->m_currTxSubflow == m_subflowid)
   // {
-    EstimateRtt(tcpHeader, ackNumber);
+  EstimateRtt(tcpHeader, ackNumber);
   // }
   // else 
   // {
@@ -597,6 +598,15 @@ TdTcpTxSubflow::DoRetransmit ()
   }
   //NS_ASSERT (m_sackEnabled || seq == m_txBuffer->HeadSequence ());
   NS_ASSERT (seq == m_txBuffer->HeadSequence ());
+
+  TdTcpMapping mapping;
+  bool result = m_TxMappings.GetMappingForSSN(seq, mapping);
+  if (!result)
+  {
+    NS_LOG_INFO("Can't retx no mapped packet");
+    return;
+  }
+
   NS_LOG_INFO ("Retransmitting " << seq);
 
   // Update the trace and retransmit the segment
