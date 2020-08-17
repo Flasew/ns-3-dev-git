@@ -165,6 +165,7 @@ std::ofstream qllog;
 // std::ofstream frlog;
 // std::ofstream lolog;
 std::ofstream cwndlog;
+std::ofstream rxlog;
 std::ofstream congStatelog;
 std::ofstream config;
 
@@ -217,6 +218,15 @@ void CycleRate() {
   }
 
   Simulator::Schedule(MicroSeconds(t), CycleRate);
+}
+
+void RxTrace(std::string ctxt, Ptr<const Packet> p, const Address &address) 
+{
+  static uint64_t recved = 0; 
+  if (rxlog.is_open()) {
+    recved += p->GetSize();
+    rxlog << Simulator::Now().GetNanoSeconds() << ", " << recved << std::endl;
+  }
 }
 
 // void QlTrace (std::string ctxt, uint32_t oldValue, uint32_t newValue)
@@ -487,6 +497,10 @@ void ParseBWP(std::string & p)
     oss << "./qllog" << std::put_time(&tm, "_%m_%d_%Y_%H_%M_%S");
     qllog.open(oss.str());
 
+    oss.str("");
+    oss << "./rxlog" << std::put_time(&tm, "_%m_%d_%Y_%H_%M_%S");
+    rxlog.open(oss.str());
+
     // oss.str("");
     // oss << "./frlog" << std::put_time(&tm, "_%m_%d_%Y_%H_%M_%S");
     // frlog.open(oss.str());
@@ -619,6 +633,8 @@ void ParseBWP(std::string & p)
     // sb->SetRecoveryAlgorithm(rec);
     sb->SetRetxThresh(dupackth);
     sb->SetFlowId((int)i);
+    sb->SetMinRto(Time(MilliSeconds(100)));
+    sb->SetDataRetries(64);
     // sb->SetMaxPacingRate(0, DataRate("10Gbps"));
     // sb->SetMaxPacingRate(1, DataRate("1Gbps"));
     // sb->SetPacingRatio(0, 10);
@@ -724,6 +740,8 @@ void ParseBWP(std::string & p)
   Config::ConnectWithoutContext(
     "/NodeList/2/$ns3::TrafficControlLayer/RootQueueDiscList/1/Dequeue",
     MakeCallback (&DequeueTrace));
+  Config::Connect ("/NodeList/*/ApplicationList/*/$ns3::PacketSink/Rx",
+    MakeCallback (&RxTrace));
   if (!nochange)
     Simulator::Schedule(MicroSeconds(1000000+bwt[0].period), CycleRate);
 
@@ -757,6 +775,7 @@ void ParseBWP(std::string & p)
   // frlog.close();
   // lolog.close();
   cwndlog.close();
+  rxlog.close();
 
   config.close();
 

@@ -573,7 +573,6 @@ public:
   typedef void (* TcpTxRxTracedCallback)(const Ptr<const Packet> packet, const TcpHeader& header,
                                          const Ptr<const TcpSocketBase> socket);
 
-protected:
   // Implementing ns3::TcpSocket -- Attribute get/set
   // inherited, no need to doc
 

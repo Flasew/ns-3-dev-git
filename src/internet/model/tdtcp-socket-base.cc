@@ -1056,7 +1056,7 @@ TdTcpSocketBase::SendPendingData (bool withAck)
         tx->m_tcb->m_nextTxSequence = existed_mapping->second.second.first;
         int pkt_sz = existed_mapping->second.second.second; 
         Ptr<Packet> p = m_txBuffer->CopyFromSequence(pkt_sz, next);
-        std::cerr << "Transmitting a transmitted packet: DSN=" << next << " SSN=(" << (int)tx->m_subflowid << ", " << existed_mapping->second.second.first << ")" << std::endl;
+        //std::cerr << "Transmitting a transmitted packet: DSN=" << next << " SSN=(" << (int)tx->m_subflowid << ", " << existed_mapping->second.second.first << ")" << std::endl;
         tx->DoRetransmit();
         break;
       }

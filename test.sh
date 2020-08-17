@@ -10,10 +10,10 @@ b=10000000000
 #declare -a dlarr=(50000 100000 200000 500000 1000000 2000000)
 #declare -a flarr=(1 5 10 20)
 #declare -a qlarr=(50 100 200 400)
-declare -a bwarr=(64)
-declare -a flarr=(20)
+declare -a bwarr=(2048)
+declare -a flarr=(5)
 declare -a dlarr=(100000)
-declare -a qlarr=(50)
+declare -a qlarr=(100)
 for j in "${flarr[@]}"; do
   for i in "${bwarr[@]}"; do
     for q in "${qlarr[@]}"; do
